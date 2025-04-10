@@ -51,7 +51,6 @@ def create_stripe_account_with_token(data):
         email = data.get('email')
         iban = data.get('iban')
         website = data.get('website')
-        tos_date = data.get('tos_date', int(time.time()))
 
         if not account_token:
             return jsonify({"error": "Missing account_token"}), 400
@@ -83,12 +82,8 @@ def create_stripe_account_with_token(data):
                 "payments": {
                     "statement_descriptor": "SHAY BEAUTY"
                 }
-            },
-            tos_acceptance={
-                "date": tos_date,
-                "ip": request.remote_addr,
-                "service_agreement": "full"
             }
+            # ❌ Ne surtout pas inclure `tos_acceptance` ici avec un token
         )
 
         return jsonify({"id": account.id})
@@ -99,7 +94,6 @@ def create_stripe_account_with_token(data):
     except Exception as e:
         print(f"Error: {e}")
         return jsonify({"error": str(e)}), 500
-
 # --- Legacy API endpoints ---
 @app.route('/api/create-stripe-account', methods=['POST'])
 def create_stripe_account():
