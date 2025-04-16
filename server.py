@@ -42,7 +42,8 @@ def upload_document_options():
     response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
     response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
     response.headers.add("Access-Control-Allow-Credentials", "true")
-    return response# --- Simplified token-based account creation endpoint ---
+    return response
+    # --- Simplified token-based account creation endpoint ---
 @app.route('/', methods=['POST'])
 def handle_stripe_action():
     try:
