@@ -35,7 +35,6 @@ def add_cors_headers(response):
     response.headers.add("Access-Control-Allow-Credentials", "true")
     return response
 
-# Route dédiée pour la requête OPTIONS de preflight sur l’upload
 @app.route('/api/upload-document', methods=['OPTIONS'])
 def upload_document_options():
     response = jsonify({'message': 'Preflight OK'})
@@ -43,8 +42,7 @@ def upload_document_options():
     response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
     response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
     response.headers.add("Access-Control-Allow-Credentials", "true")
-    return response    
-# --- Simplified token-based account creation endpoint ---
+    return response# --- Simplified token-based account creation endpoint ---
 @app.route('/', methods=['POST'])
 def handle_stripe_action():
     try:
