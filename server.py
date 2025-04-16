@@ -66,7 +66,8 @@ def create_stripe_account_with_token(data):
             email=email,
             account_token=account_token,
             business_profile={
-                "url": website or "https://shay-b.netlify.app"
+                "url": website or "https://shay-b.netlify.app",
+                "mcc": "5734"  # Secteur d’activité : 5734 = "Computer Software Stores", change si besoin
             },
             external_account={
                 "object": "bank_account",
