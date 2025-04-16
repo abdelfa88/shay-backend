@@ -33,6 +33,14 @@ def add_cors_headers(response):
     response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     response.headers.add("Access-Control-Allow-Credentials", "true")
     return response
+    @app.route('/api/upload-document', methods=['OPTIONS'])
+def upload_document_options():
+    response = jsonify({'message': 'Preflight OK'})
+    response.headers.add("Access-Control-Allow-Origin", "https://shay-b.netlify.app")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+    response.headers.add("Access-Control-Allow-Credentials", "true")
+    return response 
     
 # --- Simplified token-based account creation endpoint ---
 @app.route('/', methods=['POST'])
