@@ -26,7 +26,14 @@ CORS(app,
      expose_headers=["Content-Type", "Authorization"],
      allow_headers=["Content-Type", "Authorization"],
      methods=["GET", "POST", "OPTIONS"])
-
+@app.after_request
+def add_cors_headers(response):
+    response.headers.add("Access-Control-Allow-Origin", "https://shay-b.netlify.app")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    response.headers.add("Access-Control-Allow-Credentials", "true")
+    return response
+    
 # --- Simplified token-based account creation endpoint ---
 @app.route('/', methods=['POST'])
 def handle_stripe_action():
