@@ -210,6 +210,15 @@ def create_custom_account():
         print(f"Error creating custom Stripe account: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/check-stripe-status', methods=['OPTIONS'])
+def check_stripe_status_options():
+    response = jsonify({'message': 'Preflight OK'})
+    response.headers.add("Access-Control-Allow-Origin", "https://shay-b.netlify.app")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+    response.headers.add("Access-Control-Allow-Credentials", "true")
+    return response
+    
 @app.route('/api/check-stripe-status', methods=['POST'])
 def check_stripe_status():
     try:
