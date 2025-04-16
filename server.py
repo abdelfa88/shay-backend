@@ -20,11 +20,11 @@ else:
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='dist', static_url_path='/')
-CORS(app, resources={r"/*": {"origins": ["https://shay-b.netlify.app"]}}, 
-     supports_credentials=True,
-     expose_headers=["Content-Type", "Authorization"],
+CORS(app, resources={r"/*": {"origins": "https://shay-b.netlify.app"}},
+     methods=["GET", "POST", "OPTIONS"],
      allow_headers=["Content-Type", "Authorization"],
-     methods=["GET", "POST", "OPTIONS"])
+     expose_headers=["Content-Type", "Authorization"],
+     supports_credentials=True)
 
 # --- Simplified token-based account creation endpoint ---
 @app.route('/', methods=['POST'])
