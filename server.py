@@ -285,24 +285,23 @@ def create_checkout_session():
         data = request.json
         amount = data.get('amount')  # En centimes
         seller_account = data.get('stripe_account_id')
+        platform_account_id = os.getenv('STRIPE_MAIN_ACCOUNT_ID')
 
         if not amount or not seller_account:
             return jsonify({"error": "amount and stripe_account_id are required"}), 400
 
-        platform_account_id = os.getenv('STRIPE_MAIN_ACCOUNT_ID')  # Ton propre compte plateforme
+        payment_intent_data = {}
 
-        # Construction des données pour payment_intent
-        payment_intent_data = {
-            'application_fee_amount': int(amount * 0.08) + 70  # frais Shay
-        }
-
-        # Si le vendeur a un compte Stripe différent de toi, transfert autorisé
         if seller_account != platform_account_id:
-            payment_intent_data['transfer_data'] = {
-                'destination': seller_account
+            # ✅ Paiement vers un vendeur connecté (OK)
+            payment_intent_data = {
+                'application_fee_amount': int(amount * 0.08) + 70,
+                'transfer_data': {
+                    'destination': seller_account
+                }
             }
 
-        # Création de la session Stripe
+        # ✅ Création de la session Stripe
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
@@ -317,7 +316,6 @@ def create_checkout_session():
             success_url='https://shay-b.netlify.app/success',
             cancel_url='https://shay-b.netlify.app/cancel',
             payment_intent_data=payment_intent_data,
-            # Ne pas préciser stripe_account si c’est le compte principal
             stripe_account=seller_account if seller_account != platform_account_id else None
         )
 
