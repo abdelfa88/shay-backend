@@ -285,23 +285,11 @@ def create_checkout_session():
         data = request.json
         amount = data.get('amount')  # En centimes
         seller_account = data.get('stripe_account_id')
-        platform_account_id = os.getenv('STRIPE_MAIN_ACCOUNT_ID')
 
         if not amount or not seller_account:
             return jsonify({"error": "amount and stripe_account_id are required"}), 400
 
-        payment_intent_data = {}
-
-        if seller_account != platform_account_id:
-            # ✅ Paiement vers un vendeur connecté (OK)
-            payment_intent_data = {
-                'application_fee_amount': int(amount * 0.08) + 70,
-                'transfer_data': {
-                    'destination': seller_account
-                }
-            }
-
-        # ✅ Création de la session Stripe
+        # Paiement 100% reversé au vendeur, pas de frais
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
@@ -315,8 +303,12 @@ def create_checkout_session():
             mode='payment',
             success_url='https://shay-b.netlify.app/success',
             cancel_url='https://shay-b.netlify.app/cancel',
-            payment_intent_data=payment_intent_data,
-            stripe_account=seller_account if seller_account != platform_account_id else None
+            payment_intent_data={
+                'transfer_data': {
+                    'destination': seller_account
+                }
+            },
+            stripe_account=None  # Important de ne rien forcer ici
         )
 
         return jsonify({'url': session.url})
