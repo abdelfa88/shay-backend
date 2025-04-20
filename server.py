@@ -289,11 +289,20 @@ def create_checkout_session():
         if not amount or not seller_account:
             return jsonify({"error": "amount and stripe_account_id are required"}), 400
 
-        # ✅ Protection anti-erreur : ne jamais envoyer vers ton propre compte
-        if seller_account == os.getenv('STRIPE_MAIN_ACCOUNT_ID'):  # Ajoute cette var dans ton .env
-            return jsonify({"error": "❌ Le compte Stripe du vendeur ne peut pas être le compte principal"}), 400
+        platform_account_id = os.getenv('STRIPE_MAIN_ACCOUNT_ID')  # Ton propre compte plateforme
 
-        # ✅ Création de la session Stripe
+        # Construction des données pour payment_intent
+        payment_intent_data = {
+            'application_fee_amount': int(amount * 0.08) + 70  # frais Shay
+        }
+
+        # Si le vendeur a un compte Stripe différent de toi, transfert autorisé
+        if seller_account != platform_account_id:
+            payment_intent_data['transfer_data'] = {
+                'destination': seller_account
+            }
+
+        # Création de la session Stripe
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
@@ -307,16 +316,13 @@ def create_checkout_session():
             mode='payment',
             success_url='https://shay-b.netlify.app/success',
             cancel_url='https://shay-b.netlify.app/cancel',
-            payment_intent_data={
-                'application_fee_amount': int(amount * 0.08) + 70,
-                'transfer_data': {
-                    'destination': seller_account,
-                },
-            },
-            stripe_account=seller_account
+            payment_intent_data=payment_intent_data,
+            # Ne pas préciser stripe_account si c’est le compte principal
+            stripe_account=seller_account if seller_account != platform_account_id else None
         )
 
         return jsonify({'url': session.url})
+
     except Exception as e:
         print(f"❌ Error creating checkout session: {e}")
         return jsonify({"error": str(e)}), 500
