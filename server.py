@@ -315,6 +315,43 @@ def create_checkout_session():
     except Exception as e:
         print(f"❌ Error creating checkout session: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/create-appointment-checkout', methods=['POST'])
+def create_appointment_checkout():
+    try:
+        data = request.json
+        amount = data.get('amount')  # en centimes
+        seller_account = data.get('stripe_account_id')
+
+        if not amount or not seller_account:
+            return jsonify({"error": "amount and stripe_account_id are required"}), 400
+
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price_data': {
+                    'currency': 'eur',
+                    'product_data': {'name': 'Acompte réservation'},
+                    'unit_amount': int(amount),
+                },
+                'quantity': 1,
+            }],
+            mode='payment',
+            success_url='https://shay-b.netlify.app/success',
+            cancel_url='https://shay-b.netlify.app/cancel',
+            payment_intent_data={
+                'transfer_data': {
+                    'destination': seller_account
+                }
+            },
+            stripe_account=None  # ne rien forcer ici
+        )
+
+        return jsonify({'url': session.url})
+
+    except Exception as e:
+        print(f"❌ Error creating appointment checkout session: {e}")
+        return jsonify({"error": str(e)}), 500
         
 # Serve frontend
 @app.route('/', defaults={'path': ''}, methods=['GET'])
