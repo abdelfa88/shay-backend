@@ -307,8 +307,7 @@ def create_checkout_session():
                 'transfer_data': {
                     'destination': seller_account
                 }
-            },
-            stripe_account=None  # Important de ne rien forcer ici
+            }
         )
 
         return jsonify({'url': session.url})
