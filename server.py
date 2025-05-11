@@ -352,6 +352,53 @@ def create_appointment_checkout():
     except Exception as e:
         print(f"❌ Error creating appointment checkout session: {e}")
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/get-relay-points', methods=['POST'])
+def get_relay_points():
+    try:
+        data = request.json
+        postal_code = data.get("postalCode")
+
+        if not postal_code:
+            return jsonify({"error": "Code postal requis"}), 400
+
+        # 🔄 Appel vers l'API Mondial Relay (exemple simulé ici)
+        # Remplace cette partie par l’appel réel à Mondial Relay si tu as une vraie API Key
+        mock_points = [
+            {
+                "id": "PR001",
+                "name": "Tabac Presse du Centre",
+                "address": "12 Rue du Commerce",
+                "postalCode": postal_code,
+                "city": "Paris",
+                "distance": 0.8,
+                "openingHours": "Lun-Sam: 9h-19h, Dim: Fermé"
+            },
+            {
+                "id": "PR002",
+                "name": "Supermarché Express",
+                "address": "45 Avenue de la République",
+                "postalCode": postal_code,
+                "city": "Paris",
+                "distance": 1.2,
+                "openingHours": "Lun-Dim: 8h-22h"
+            },
+            {
+                "id": "PR003",
+                "name": "Librairie des Arts",
+                "address": "78 Boulevard Saint-Michel",
+                "postalCode": postal_code,
+                "city": "Paris",
+                "distance": 1.5,
+                "openingHours": "Lun-Sam: 10h-20h, Dim: 10h-13h"
+            }
+        ]
+
+        return jsonify(mock_points)
+
+    except Exception as e:
+        print(f"❌ Error fetching relay points: {e}")
+        return jsonify({"error": str(e)}), 500
         
 # Serve frontend
 @app.route('/', defaults={'path': ''}, methods=['GET'])
