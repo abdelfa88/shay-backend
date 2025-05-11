@@ -383,7 +383,7 @@ def get_relay_points():
         if response.status_code != 200:
             raise Exception(f"Erreur API Mondial Relay : {response.status_code}")
 
-        print("🔵 Réponse Mondial Relay :", response.text)  # Debug
+        print("🔵 Réponse Mondial Relay :", response.text)  # juste pour debug
 
         root = ET.fromstring(response.text)
 
