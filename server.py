@@ -361,32 +361,37 @@ def get_relay_points():
     try:
         data = request.json
         postal_code = data.get("postalCode")
-
         if not postal_code:
             return jsonify({"error": "Code postal requis"}), 400
 
-        payload = {
-            "Enseigne": os.getenv("MONDIALRELAY_BRAND_ID"),
-            "Pays": "FR",
-            "CP": postal_code
-        }
+        # XML demandé par Mondial Relay
+        payload_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://www.mondialrelay.fr/webservice/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <web:WSI3_PointRelais_Recherche>
+      <web:Enseigne>{os.getenv("MONDIALRELAY_BRAND_ID")}</web:Enseigne>
+      <web:Pays>FR</web:Pays>
+      <web:CP>{postal_code}</web:CP>
+    </web:WSI3_PointRelais_Recherche>
+  </soapenv:Body>
+</soapenv:Envelope>
+"""
 
         response = requests.post(
-            "https://connect-api.mondialrelay.com/api/Shipment/GetPointsRelais",
-            json=payload,
-            auth=(
-                os.getenv("MONDIALRELAY_LOGIN"),
-                os.getenv("MONDIALRELAY_PASSWORD")
-            )
+            "https://api.mondialrelay.com/Web_Services.asmx",
+            data=payload_xml,
+            headers={"Content-Type": "text/xml"}
         )
 
         if response.status_code != 200:
-            raise Exception(f"Erreur API Mondial Relay : {response.status_code}")
+            raise Exception(f"Erreur HTTP {response.status_code}")
 
-        print("🔵 Réponse Mondial Relay :", response.text)  # juste pour debug
+        print("🔵 Réponse Mondial Relay XML:", response.text)
 
         root = ET.fromstring(response.text)
 
+        # Adapte ici selon structure exacte de la réponse
         relay_points = []
         for point in root.findall(".//PointRelais_Details"):
             relay_points.append({
