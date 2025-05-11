@@ -372,20 +372,20 @@ def get_relay_points():
         }
 
         response = requests.post(
-            "https://connect-api.mondialrelay.com/api/Shipment/GetPointsRelais",
-            json=payload,
-            auth=(
-                os.getenv("MONDIALRELAY_LOGIN"),
-                os.getenv("MONDIALRELAY_PASSWORD")
-            )
-        )
+    "https://connect-api.mondialrelay.com/api/Shipment/GetPointsRelais",
+    json=payload,
+    auth=(
+        os.getenv("MONDIALRELAY_LOGIN"),
+        os.getenv("MONDIALRELAY_PASSWORD")
+    )
+)
 
-        print("🔵 Réponse Mondial Relay :", response.text)
+if response.status_code != 200:
+    raise Exception(f"Erreur API Mondial Relay : {response.status_code}")
 
-        if response.status_code != 200:
-            raise Exception(f"Erreur API Mondial Relay : {response.status_code}")
+print("🔵 Réponse Mondial Relay :", response.text)  # juste pour debug
 
-        root = ET.fromstring(response.text)
+root = ET.fromstring(response.text)
 
         relay_points = []
         for point in root.findall(".//PointRelais_Details"):
