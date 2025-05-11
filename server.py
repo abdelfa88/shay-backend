@@ -353,6 +353,9 @@ def create_appointment_checkout():
         print(f"❌ Error creating appointment checkout session: {e}")
         return jsonify({"error": str(e)}), 500
 
+import xml.etree.ElementTree as ET
+import requests
+
 @app.route('/api/get-relay-points', methods=['POST'])
 def get_relay_points():
     try:
@@ -362,42 +365,45 @@ def get_relay_points():
         if not postal_code:
             return jsonify({"error": "Code postal requis"}), 400
 
-        # 🔄 Appel vers l'API Mondial Relay (exemple simulé ici)
-        # Remplace cette partie par l’appel réel à Mondial Relay si tu as une vraie API Key
-        mock_points = [
-            {
-                "id": "PR001",
-                "name": "Tabac Presse du Centre",
-                "address": "12 Rue du Commerce",
-                "postalCode": postal_code,
-                "city": "Paris",
-                "distance": 0.8,
-                "openingHours": "Lun-Sam: 9h-19h, Dim: Fermé"
-            },
-            {
-                "id": "PR002",
-                "name": "Supermarché Express",
-                "address": "45 Avenue de la République",
-                "postalCode": postal_code,
-                "city": "Paris",
-                "distance": 1.2,
-                "openingHours": "Lun-Dim: 8h-22h"
-            },
-            {
-                "id": "PR003",
-                "name": "Librairie des Arts",
-                "address": "78 Boulevard Saint-Michel",
-                "postalCode": postal_code,
-                "city": "Paris",
-                "distance": 1.5,
-                "openingHours": "Lun-Sam: 10h-20h, Dim: 10h-13h"
-            }
-        ]
+        payload = {
+            "Enseigne": os.getenv("MONDIALRELAY_BRAND_ID"),
+            "Pays": "FR",
+            "CP": postal_code
+        }
 
-        return jsonify(mock_points)
+        response = requests.post(
+            "https://connect-api.mondialrelay.com/api/Shipment/GetPointsRelais",
+            json=payload,
+            auth=(
+                os.getenv("MONDIALRELAY_LOGIN"),
+                os.getenv("MONDIALRELAY_PASSWORD")
+            )
+        )
+
+        if response.status_code != 200:
+            raise Exception(f"Erreur API Mondial Relay : {response.status_code}")
+
+        result = response.json()
+
+        if not isinstance(result, list):
+            raise Exception("Réponse inattendue de Mondial Relay")
+
+        relay_points = []
+        for point in result:
+            relay_points.append({
+                "id": point["Num"],
+                "name": point["LgAdr1"],
+                "address": point["LgAdr3"],
+                "postalCode": point["CP"],
+                "city": point["Ville"],
+                "distance": point.get("Distance", 0),
+                "openingHours": f"{point.get('Horaires_Lundi', '')}, {point.get('Horaires_Samedi', '')}"
+            })
+
+        return jsonify(relay_points)
 
     except Exception as e:
-        print(f"❌ Error fetching relay points: {e}")
+        print(f"❌ Error fetching real Mondial Relay points: {e}")
         return jsonify({"error": str(e)}), 500
         
 # Serve frontend
