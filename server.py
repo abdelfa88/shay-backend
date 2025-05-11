@@ -404,8 +404,8 @@ def get_relay_points():
                 "openingHours": f"{point.findtext('Horaires_Lundi', '')}, {point.findtext('Horaires_Samedi', '')}"
             })
 
-        return jsonify(relay_points)
-
+        return jsonify({ "relay_points": relay_points })
+        
     except Exception as e:
         print(f"❌ Error fetching real Mondial Relay points: {e}")
         return jsonify({"error": str(e)}), 500
