@@ -380,12 +380,11 @@ def get_relay_points():
             )
         )
 
-        print("🔵 Réponse brute Mondial Relay :", response.text)  # Debug log
+        print("🔵 Réponse Mondial Relay :", response.text)
 
         if response.status_code != 200:
             raise Exception(f"Erreur API Mondial Relay : {response.status_code}")
 
-        # 👉 XML Parsing
         root = ET.fromstring(response.text)
 
         relay_points = []
