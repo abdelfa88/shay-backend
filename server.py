@@ -380,25 +380,24 @@ def get_relay_points():
             )
         )
 
+        print("🔵 Réponse brute Mondial Relay :", response.text)  # Debug log
+
         if response.status_code != 200:
             raise Exception(f"Erreur API Mondial Relay : {response.status_code}")
 
-print(response.text) 
-result = response.json()
-
-        if not isinstance(result, list):
-            raise Exception("Réponse inattendue de Mondial Relay")
+        # 👉 XML Parsing
+        root = ET.fromstring(response.text)
 
         relay_points = []
-        for point in result:
+        for point in root.findall(".//PointRelais_Details"):
             relay_points.append({
-                "id": point["Num"],
-                "name": point["LgAdr1"],
-                "address": point["LgAdr3"],
-                "postalCode": point["CP"],
-                "city": point["Ville"],
-                "distance": point.get("Distance", 0),
-                "openingHours": f"{point.get('Horaires_Lundi', '')}, {point.get('Horaires_Samedi', '')}"
+                "id": point.findtext("Num", default=""),
+                "name": point.findtext("LgAdr1", default=""),
+                "address": point.findtext("LgAdr3", default=""),
+                "postalCode": point.findtext("CP", default=""),
+                "city": point.findtext("Ville", default=""),
+                "distance": 0,
+                "openingHours": f"{point.findtext('Horaires_Lundi', '')}, {point.findtext('Horaires_Samedi', '')}"
             })
 
         return jsonify(relay_points)
