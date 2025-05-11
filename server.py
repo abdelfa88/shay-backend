@@ -383,7 +383,8 @@ def get_relay_points():
         if response.status_code != 200:
             raise Exception(f"Erreur API Mondial Relay : {response.status_code}")
 
-        result = response.json()
+print(response.text) 
+result = response.json()
 
         if not isinstance(result, list):
             raise Exception("Réponse inattendue de Mondial Relay")
