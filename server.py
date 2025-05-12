@@ -359,56 +359,49 @@ import requests
 @app.route('/api/get-relay-points', methods=['POST'])
 def get_relay_points():
     try:
-        data = request.json
-        postal_code = data.get("postalCode")
-        if not postal_code:
-            return jsonify({"error": "Code postal requis"}), 400
-
-        # XML demandé par Mondial Relay
-        payload_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="http://www.mondialrelay.fr/webservice/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <web:WSI3_PointRelais_Recherche>
-      <web:Enseigne>{os.getenv("MONDIALRELAY_BRAND_ID")}</web:Enseigne>
-      <web:Pays>FR</web:Pays>
-      <web:CP>{postal_code}</web:CP>
-    </web:WSI3_PointRelais_Recherche>
-  </soapenv:Body>
-</soapenv:Envelope>
-"""
-
-        response = requests.post(
-            "https://api.mondialrelay.com/Web_Services.asmx",
-            data=payload_xml,
-            headers={"Content-Type": "text/xml"}
-        )
-
-        if response.status_code != 200:
-            raise Exception(f"Erreur HTTP {response.status_code}")
-
-        print("🔵 Réponse Mondial Relay XML:", response.text)
-
-        root = ET.fromstring(response.text)
-
-        # Adapte ici selon structure exacte de la réponse
-        relay_points = []
-        for point in root.findall(".//PointRelais_Details"):
-            relay_points.append({
-                "id": point.findtext("Num", default=""),
-                "name": point.findtext("LgAdr1", default=""),
-                "address": point.findtext("LgAdr3", default=""),
-                "postalCode": point.findtext("CP", default=""),
-                "city": point.findtext("Ville", default=""),
-                "distance": 0,
-                "openingHours": f"{point.findtext('Horaires_Lundi', '')}, {point.findtext('Horaires_Samedi', '')}"
-            })
-
-        return jsonify({ "relay_points": relay_points })
+        postal_code = request.json.get('postalCode')
         
+        soap_url = "https://api.mondialrelay.com/Web_Services.asmx"
+        headers = {'Content-Type': 'text/xml; charset=utf-8'}
+        soap_request = f"""<?xml version="1.0" encoding="utf-8"?>
+        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+            <soap:Body>
+                <WSI4_PointRelais_Recherche xmlns="http://www.mondialrelay.fr/webservice/">
+                    <Enseigne>{os.getenv("MONDIALRELAY_BRAND_ID")}</Enseigne>
+                    <Pays>FR</Pays>
+                    <CP>{postal_code}</CP>
+                    <NombreResultats>20</NombreResultats>
+                    <Security>{os.getenv("MONDIALRELAY_SECURITY_KEY")}</Security>
+                </WSI4_PointRelais_Recherche>
+            </soap:Body>
+        </soap:Envelope>"""
+        
+        response = requests.post(soap_url, data=soap_request, headers=headers)
+        root = ET.fromstring(response.content)
+        
+        namespaces = {
+            'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+            'mr': 'http://www.mondialrelay.fr/webservice/'
+        }
+        
+        relay_points = []
+        for point in root.findall(".//mr:PointRelais_Details", namespaces):
+            relay_points.append({
+                'id': point.findtext('mr:Num', namespaces=namespaces),
+                'name': point.findtext('mr:LgAdr1', namespaces=namespaces),
+                'address': f"{point.findtext('mr:LgAdr3', namespaces=namespaces)} {point.findtext('mr:LgAdr4', namespaces=namespaces)}",
+                'postalCode': point.findtext('mr:CP', namespaces=namespaces),
+                'city': point.findtext('mr:Ville', namespaces=namespaces),
+                'openingHours': {
+                    'livraison': point.findtext('mr:Horaires_Livraison/mr:string', namespaces=namespaces),
+                    'retrait': point.findtext('mr:Horaires_Retrait/mr:string', namespaces=namespaces)
+                }
+            })
+        
+        return jsonify({'relay_points': relay_points})
+
     except Exception as e:
-        print(f"❌ Error fetching real Mondial Relay points: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
         
 # Serve frontend
 @app.route('/', defaults={'path': ''}, methods=['GET'])
