@@ -353,6 +353,9 @@ def create_appointment_checkout():
         print(f"❌ Error creating appointment checkout session: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/get-relay-points', methods=['POST'])
+def get_relay_points_route():
+    return get_relay_points()
 from flask import request, jsonify
 import xml.etree.ElementTree as ET
 import requests
