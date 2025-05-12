@@ -353,14 +353,16 @@ def create_appointment_checkout():
         print(f"❌ Error creating appointment checkout session: {e}")
         return jsonify({"error": str(e)}), 500
 
+from flask import request, jsonify
 import xml.etree.ElementTree as ET
 import requests
+from uuid import uuid4
 
-@app.route('/api/get-relay-points', methods=['POST'])
 def get_relay_points():
     try:
         postal_code = request.json.get('postalCode')
         
+        # Configuration Mondial Relay
         soap_url = "https://api.mondialrelay.com/Web_Services.asmx"
         headers = {'Content-Type': 'text/xml; charset=utf-8'}
         soap_request = f"""<?xml version="1.0" encoding="utf-8"?>
@@ -371,35 +373,48 @@ def get_relay_points():
                     <Pays>FR</Pays>
                     <CP>{postal_code}</CP>
                     <NombreResultats>20</NombreResultats>
-                    <Security>{os.getenv("MONDIALRELAY_SECURITY_KEY")}</Security>
-                </WSI4_PointRelais_Recherche>
+                    <Security>VOTRE_CLE_SECURITE</Security>
+                    </WSI4_PointRelais_Recherche>
             </soap:Body>
         </soap:Envelope>"""
         
+        # Envoi de la requête SOAP
         response = requests.post(soap_url, data=soap_request, headers=headers)
         root = ET.fromstring(response.content)
         
+        # Gestion des namespaces
         namespaces = {
             'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
             'mr': 'http://www.mondialrelay.fr/webservice/'
         }
         
+        # Extraction sécurisée avec valeurs par défaut
         relay_points = []
         for point in root.findall(".//mr:PointRelais_Details", namespaces):
-            relay_points.append({
-                'id': point.findtext('mr:Num', namespaces=namespaces),
-                'name': point.findtext('mr:LgAdr1', namespaces=namespaces),
-                'address': f"{point.findtext('mr:LgAdr3', namespaces=namespaces)} {point.findtext('mr:LgAdr4', namespaces=namespaces)}",
-                'postalCode': point.findtext('mr:CP', namespaces=namespaces),
-                'city': point.findtext('mr:Ville', namespaces=namespaces),
-                'openingHours': {
-                    'livraison': point.findtext('mr:Horaires_Livraison/mr:string', namespaces=namespaces),
-                    'retrait': point.findtext('mr:Horaires_Retrait/mr:string', namespaces=namespaces)
-                }
-            })
-        
+            # Récupération avec fallback pour chaque champ
+            base_text = lambda path: point.findtext(f'mr:{path}', namespaces=namespaces) or ''
+            
+            relay_point = {
+                'id': point.findtext('mr:Num', namespaces=namespaces) or f'unknown-{uuid4()}',
+                'name': base_text('LgAdr1'),
+                'address': f"{base_text('LgAdr3')} {base_text('LgAdr4')}".strip(),
+                'postalCode': base_text('CP'),
+                'city': base_text('Ville'),
+                'distance': float(point.findtext('mr:Distance', namespaces=namespaces) or 0),
+                'openingHours': (
+                    point.findtext('mr:Horaires_Livraison/mr:string', namespaces=namespaces)
+                    or point.findtext('mr:Horaires_Retrait/mr:string', namespaces=namespaces)
+                    or 'Non communiqué'
+                ),
+                'photoUrl': ''  # Champ obligatoire vide par défaut
+            }
+            
+            # Validation finale pour éviter null/undefined
+            relay_point = {k: v if v is not None else '' for k, v in relay_point.items()}
+            relay_points.append(relay_point)
+            
         return jsonify({'relay_points': relay_points})
-
+        
     except Exception as e:
         return jsonify({'error': str(e)}), 500
         
