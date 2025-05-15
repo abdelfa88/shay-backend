@@ -5,6 +5,11 @@ import stripe
 from dotenv import load_dotenv
 import time
 
+@app.before_request
+def handle_options_requests():
+    if request.method == 'OPTIONS':
+        return '', 204
+        
 # Load environment variables
 load_dotenv()
 
