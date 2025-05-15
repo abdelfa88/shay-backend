@@ -315,7 +315,16 @@ def create_checkout_session():
     except Exception as e:
         print(f"❌ Error creating checkout session: {e}")
         return jsonify({"error": str(e)}), 500
-
+        
+@app.route('/api/create-appointment-checkout', methods=['OPTIONS'])
+def create_appointment_checkout_options():
+    response = jsonify({'message': 'Preflight OK'})
+    response.headers.add("Access-Control-Allow-Origin", "https://shay-b.netlify.app")
+    response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
+    response.headers.add("Access-Control-Allow-Credentials", "true")
+    return response
+    
 @app.route('/api/create-appointment-checkout', methods=['POST'])
 def create_appointment_checkout():
     try:
