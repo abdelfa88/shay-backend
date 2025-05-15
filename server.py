@@ -29,7 +29,7 @@ CORS(app,
 # CORS Headers ajoutés à chaque réponse
 @app.after_request
 def add_cors_headers(response):
-    response.headers.add("Access-Control-Allow-Origin", "https://shay-b.netlify.app")
+    response.headers("Access-Control-Allow-Origin", "https://shay-b.netlify.app")
     response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
     response.headers.add("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     response.headers.add("Access-Control-Allow-Credentials", "true")
