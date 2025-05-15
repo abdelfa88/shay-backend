@@ -284,8 +284,8 @@ def create_checkout_session():
     try:
         data = request.json
         amount = data.get('amount')  # En centimes
-        seller_account = data.get('stripe_account_id')
-
+        seller_account = data.get('stripe_account_id') or data.get('sellerStripeId')
+        
         if not amount or not seller_account:
             return jsonify({"error": "amount and stripe_account_id are required"}), 400
 
