@@ -4,4 +4,4 @@ stripe==5.4.0
 python-dotenv==1.0.0
 gunicorn==20.1.0
 werkzeug==2.2.3
-supabase==0.2.7
+supabase==0.0.7
