@@ -420,6 +420,52 @@ def get_relay_points():
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/create-boost-session', methods=['POST'])
+def create_boost_session():
+    try:
+        data = request.json
+        product_id = data.get('productId')
+        price_id = data.get('priceId')
+        duration = data.get('duration')
+        user_id = data.get('buyerId')
+
+        if not all([product_id, price_id, user_id]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        # Vérifie que le produit appartient bien à l'utilisateur
+        from supabase_py import create_client
+        supabase_url = os.getenv("SUPABASE_URL")
+        supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+        supabase = create_client(supabase_url, supabase_key)
+
+        product = supabase.table("products").select("user_id", "title").eq("id", product_id).single().execute()
+        if not product.data:
+            return jsonify({"error": "Product not found"}), 404
+        if product.data["user_id"] != user_id:
+            return jsonify({"error": "You can only boost your own product"}), 403
+
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price": price_id,
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url="https://shay-b.netlify.app/payment/success?type=boost&session_id={CHECKOUT_SESSION_ID}",
+            cancel_url="https://shay-b.netlify.app/payment/cancel",
+            metadata={
+                "productId": product_id,
+                "userId": user_id,
+                "duration": duration,
+                "type": "boost"
+            }
+        )
+
+        return jsonify({"id": session.id, "url": session.url})
+    except Exception as e:
+        print("❌ Error in /api/create-boost-session:", e)
+        return jsonify({"error": str(e)}), 500
         
 # Serve frontend
 @app.route('/', defaults={'path': ''}, methods=['GET'])
