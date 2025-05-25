@@ -235,19 +235,22 @@ def check_stripe_status():
             "currentDeadline": account.requirements.current_deadline
         }
         return jsonify(status)
-    except stripe.error.StripeError as e:
-    print(f"Stripe error: {e}")
-    return jsonify({
-        "isVerified": True,
-        "isRestricted": False,
-        "requiresInfo": False,
-        "pendingRequirements": [],
-        "currentDeadline": None
-    })
-    except Exception as e:
-        print(f"Error checking Stripe status: {e}")
-        return jsonify({"error": str(e)}), 500
 
+    except stripe.error.StripeError as e:
+        print(f"❌ Stripe error: {e}")
+        return jsonify({
+            "error": str(e),
+            "isVerified": False,
+            "isRestricted": True,
+            "requiresInfo": True,
+            "pendingRequirements": ["Compte introuvable ou invalide"],
+            "currentDeadline": None
+        }), 400
+
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        return jsonify({"error": str(e)}), 500
+        
 @app.route('/api/upload-document', methods=['POST'])
 def upload_document():
     try:
