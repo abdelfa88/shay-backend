@@ -434,7 +434,7 @@ def create_boost_session():
             return jsonify({"error": "Missing required fields"}), 400
 
         # Vérifie que le produit appartient bien à l'utilisateur
-        from supabase_py import create_client
+        from supabase import create_client, client
         supabase_url = os.getenv("SUPABASE_URL")
         supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
         supabase = create_client(supabase_url, supabase_key)
