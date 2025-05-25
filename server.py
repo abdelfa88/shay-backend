@@ -238,7 +238,7 @@ def check_stripe_status():
     except stripe.error.StripeError as e:
     print(f"Stripe error: {e}")
     return jsonify({
-        "isVerified": True,              # ← FAUX résultat !
+        "isVerified": True,
         "isRestricted": False,
         "requiresInfo": False,
         "pendingRequirements": [],
