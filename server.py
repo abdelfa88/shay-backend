@@ -53,17 +53,17 @@ def handle_stripe_action():
 
         action = data['action']
 
-        if action == 'create-stripe-account-with-token':
-            return create_stripe_account_with_token(data)
+        if action == 'create-stripe-account':
+            if 'account_token' in data:
+                return create_stripe_account_with_token(data)
+            else:
+                return create_stripe_account(data)
         elif action == 'check-stripe-status':
             return check_stripe_status()
         elif action == 'upload-document':
             return upload_document()
-        elif action == 'create-stripe-account':
-            return create_stripe_account_from_action(data)
         else: 
             return jsonify({"error": f"Unknown action '{action}'"}), 400
-
     except Exception as e:
         print(f"❌ Error in handle_stripe_action: {e}")
         return jsonify({"error": str(e)}), 500
