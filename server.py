@@ -227,19 +227,19 @@ def check_stripe_status():
             return jsonify({"error": "Missing account_id parameter"}), 400
 
         account = stripe.Account.retrieve(account_id)
-        
-    has_active_transfers = account.capabilities.get('transfers') == 'active'
-    has_no_pending_requirements = not account.requirements.get('currently_due')
-    has_no_disabled_reason = account.requirements.get('disabled_reason') is None
 
-    status = {
-        "isVerified": has_active_transfers and has_no_pending_requirements and has_no_disabled_reason,
-        "isRestricted": not has_no_disabled_reason,
-        "requiresInfo": not has_no_pending_requirements,
-        "pendingRequirements": account.requirements.get('currently_due', []),
-        "currentDeadline": account.requirements.get('current_deadline')
-    }
-    return jsonify(status)
+        has_active_transfers = account.capabilities.get('transfers') == 'active'
+        has_no_pending_requirements = not account.requirements.get('currently_due')
+        has_no_disabled_reason = account.requirements.get('disabled_reason') is None
+
+        status = {
+            "isVerified": has_active_transfers and has_no_pending_requirements and has_no_disabled_reason,
+            "isRestricted": not has_no_disabled_reason,
+            "requiresInfo": not has_no_pending_requirements,
+            "pendingRequirements": account.requirements.get('currently_due', []),
+            "currentDeadline": account.requirements.get('current_deadline')
+        }
+        return jsonify(status)
 
     except stripe.error.StripeError as e:
         print(f"❌ Stripe error: {e}")
