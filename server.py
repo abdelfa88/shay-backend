@@ -223,9 +223,8 @@ def check_stripe_status(data=None):
     try:
         if data is None:
             data = request.json
-        
-        account_id = data.get('account_id')  # <- ici c'est toujours défini
 
+        account_id = data.get('account_id')
         if not account_id:
             return jsonify({"error": "Missing account_id parameter"}), 400
 
@@ -242,6 +241,13 @@ def check_stripe_status(data=None):
             "pendingRequirements": account.requirements.get('currently_due', []),
             "currentDeadline": account.requirements.get('current_deadline')
         }
+
+        # Correction : forcer l'affichage du formulaire si les transferts sont inactifs
+        if not has_active_transfers:
+            status["requiresInfo"] = True
+            if not status["pendingRequirements"]:
+                status["pendingRequirements"] = ["verification.document.front"]
+
         return jsonify(status)
 
     except stripe.error.StripeError as e:
@@ -257,8 +263,7 @@ def check_stripe_status(data=None):
 
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
-        return jsonify({"error": str(e)}), 500
-        
+        return jsonify({"error": str(e)}), 500        
         
 @app.route('/api/upload-document', methods=['POST'])
 def upload_document():
