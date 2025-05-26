@@ -223,12 +223,14 @@ def check_stripe_status(data=None):
     try:
         if data is None:
             data = request.json
-            account_id = data.get('account_id')
+        
+        account_id = data.get('account_id')  # <- ici c'est toujours défini
+
         if not account_id:
             return jsonify({"error": "Missing account_id parameter"}), 400
 
         account = stripe.Account.retrieve(account_id)
-        
+
         has_active_transfers = account.capabilities.get('transfers') == 'active'
         has_no_pending_requirements = not account.requirements.get('currently_due')
         has_no_disabled_reason = account.requirements.get('disabled_reason') is None
@@ -256,6 +258,7 @@ def check_stripe_status(data=None):
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
         return jsonify({"error": str(e)}), 500
+        
         
 @app.route('/api/upload-document', methods=['POST'])
 def upload_document():
