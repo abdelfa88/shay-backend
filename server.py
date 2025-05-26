@@ -488,17 +488,51 @@ def serve(path):
 
 def create_stripe_account_from_action(data):
     try:
-        email = data.get("email")
-        if not email:
-            return jsonify({"error": "Email manquant"}), 400
+        required_fields = ['email', 'first_name', 'last_name', 'phone', 'iban',
+                           'address_line1', 'address_city', 'address_postal_code',
+                           'dob_day', 'dob_month', 'dob_year']
+        for field in required_fields:
+            if not data.get(field):
+                return jsonify({"error": f"Champ manquant : {field}"}), 400
 
         account = stripe.Account.create(
-            type="express",
+            type="custom",
             country="FR",
-            email=email,
+            email=data["email"],
             capabilities={
                 "card_payments": {"requested": True},
                 "transfers": {"requested": True}
+            },
+            individual={
+                "first_name": data["first_name"],
+                "last_name": data["last_name"],
+                "phone": data["phone"],
+                "dob": {
+                    "day": int(data["dob_day"]),
+                    "month": int(data["dob_month"]),
+                    "year": int(data["dob_year"])
+                },
+                "address": {
+                    "line1": data["address_line1"],
+                    "city": data["address_city"],
+                    "postal_code": data["address_postal_code"],
+                    "country": "FR"
+                }
+            },
+            external_account={
+                "object": "bank_account",
+                "country": "FR",
+                "currency": "eur",
+                "account_number": data["iban"].replace(" ", "")
+            },
+            settings={
+                "payouts": {"schedule": {"interval": "manual"}},
+                "payments": {"statement_descriptor": "SHAY BEAUTY"}
+            },
+            tos_acceptance={
+                "date": int(time.time()),
+                "ip": request.remote_addr,
+                "service_agreement": "full"
             }
         )
 
