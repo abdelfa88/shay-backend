@@ -56,7 +56,7 @@ def handle_stripe_action():
         if action == 'create-stripe-account-with-token':
             return create_stripe_account_with_token(data)
         elif action == 'check-stripe-status':
-            return check_stripe_status()
+            return check_stripe_status(data)
         elif action == 'upload-document':
             return upload_document()
         else:
