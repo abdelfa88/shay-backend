@@ -64,7 +64,7 @@ def handle_stripe_action():
             return check_stripe_status(data)
         elif action == 'upload-document':
             return upload_document()
-        else:
+else:
             return jsonify({"error": f"Unknown action '{action}'"}), 400
 
     except Exception as e:
@@ -123,10 +123,11 @@ def create_stripe_account_with_token(data):
         return jsonify({"error": str(e)}), 500
 # --- Legacy API endpoints ---
 @app.route('/api/create-stripe-account', methods=['POST'])
-def create_stripe_account():
+def create_stripe_account(data=None):
     try:
-        data = request.json
-        required_fields = ['first_name', 'last_name', 'email', 'phone',
+         if data is None:
+            data = request.json
+             required_fields = ['first_name', 'last_name', 'email', 'phone',
                            'dob_day', 'dob_month', 'dob_year',
                            'address_line1', 'address_city', 'address_postal_code', 'iban']
         for field in required_fields:
