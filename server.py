@@ -221,11 +221,9 @@ def check_stripe_status_options():
 @app.route('/api/check-stripe-status', methods=['POST'])
 def check_stripe_status(data=None):
     try:
-        # Si les données n'ont pas été injectées en argument, on prend depuis la requête HTTP
         if data is None:
             data = request.json
 
-        # ✅ Sécurité : toujours définir account_id après avoir obtenu data
         account_id = data.get('account_id') if data else None
 
         if not account_id:
