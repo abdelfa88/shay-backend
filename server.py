@@ -234,25 +234,26 @@ def check_stripe_status(data=None):
         account = stripe.Account.retrieve(account_id)
 
         currently_due = account.requirements.get('currently_due') or []
-has_active_transfers = account.capabilities.get('transfers') == 'active'
-has_no_pending_requirements = len(currently_due) == 0
-has_no_disabled_reason = account.requirements.get('disabled_reason') is None
+        has_active_transfers = account.capabilities.get('transfers') == 'active'
+        has_no_pending_requirements = len(currently_due) == 0
+        has_no_disabled_reason = account.requirements.get('disabled_reason') is None
 
-status = {
-    "isVerified": has_active_transfers and has_no_pending_requirements and has_no_disabled_reason,
-    "isRestricted": not has_no_disabled_reason,
-    "requiresInfo": not has_no_pending_requirements,
-    "pendingRequirements": currently_due,
-    "currentDeadline": account.requirements.get('current_deadline')
-}
+        status = {
+            "isVerified": has_active_transfers and has_no_pending_requirements and has_no_disabled_reason,
+            "isRestricted": not has_no_disabled_reason,
+            "requiresInfo": not has_no_pending_requirements,
+            "pendingRequirements": currently_due,
+            "currentDeadline": account.requirements.get('current_deadline')
+        }
 
-if not has_active_transfers:
-    status["requiresInfo"] = True
-    if not status["pendingRequirements"]:
-        status["pendingRequirements"] = ["verification.document.front"]
+        # Correction : forcer l'affichage du formulaire si les transferts sont inactifs
+        if not has_active_transfers:
+            status["requiresInfo"] = True
+            if not status["pendingRequirements"]:
+                status["pendingRequirements"] = ["verification.document.front"]
 
-    return jsonify(status)  # <== ce return doit être ici, dehors du if
-    
+        return jsonify(status)
+
     except stripe.error.StripeError as e:
         print(f"❌ Stripe error: {e}")
         return jsonify({
@@ -266,7 +267,8 @@ if not has_active_transfers:
 
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
-        return jsonify({"error": str(e)}), 500        
+        return jsonify({"error": str(e)}), 500
+        
         
 @app.route('/api/upload-document', methods=['POST'])
 def upload_document():
