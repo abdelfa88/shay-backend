@@ -47,12 +47,15 @@ def upload_document_options():
 @app.route('/', methods=['POST'])
 def handle_stripe_action():
     try:
-        data = request.json
+        if request.content_type.startswith('multipart/form-data'):
+            data = request.form
+        else:
+            data = request.get_json()
+
         if not data or 'action' not in data:
             return jsonify({"error": "Missing 'action' field"}), 400
 
         action = data['action']
-
         if action == 'create-stripe-account-with-token':
             return create_stripe_account_with_token(data)
         elif action == 'check-stripe-status':
