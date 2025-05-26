@@ -54,10 +54,9 @@ def handle_stripe_action():
         action = data['action']
 
         if action == 'create-stripe-account':
-            if 'account_token' in data:
-                return create_stripe_account_with_token(data)
-            else:
-                return create_stripe_account(data)
+            return create_stripe_account(data)
+        elif action == 'create-stripe-account-with-token':
+            return create_stripe_account_with_token(data)
         elif action == 'check-stripe-status':
             return check_stripe_status()
         elif action == 'upload-document':
