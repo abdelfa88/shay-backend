@@ -219,10 +219,11 @@ def check_stripe_status_options():
     return response
     
 @app.route('/api/check-stripe-status', methods=['POST'])
-def check_stripe_status():
+def check_stripe_status(data=None):
     try:
-        data = request.json
-        account_id = data.get('account_id')
+        if data is None:
+            data = request.json
+            account_id = data.get('account_id')
         if not account_id:
             return jsonify({"error": "Missing account_id parameter"}), 400
 
