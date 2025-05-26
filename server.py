@@ -475,25 +475,6 @@ def create_boost_session():
         print("❌ Error in /api/create-boost-session:", e)
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/open-account-link', methods=['POST'])
-def open_account_link():
-    try:
-        data = request.json
-        account_id = data.get('account_id')
-        if not account_id:
-            return jsonify({"error": "Missing account_id"}), 400
-
-        link = stripe.AccountLink.create(
-            account=account_id,
-            refresh_url='https://shay-b.netlify.app/settings/stripe',
-            return_url='https://shay-b.netlify.app/settings/stripe',
-            type='account_onboarding',
-        )
-        return jsonify({"url": link.url})
-
-    except Exception as e:
-        print(f"❌ Error creating account link: {e}")
-        return jsonify({"error": str(e)}), 500
         
 # Serve frontend
 @app.route('/', defaults={'path': ''}, methods=['GET'])
