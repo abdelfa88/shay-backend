@@ -250,9 +250,9 @@ if not has_active_transfers:
     status["requiresInfo"] = True
     if not status["pendingRequirements"]:
         status["pendingRequirements"] = ["verification.document.front"]
-        
-        return jsonify(status)
 
+    return jsonify(status)  # <== ce return doit être ici, dehors du if
+    
     except stripe.error.StripeError as e:
         print(f"❌ Stripe error: {e}")
         return jsonify({
