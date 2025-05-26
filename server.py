@@ -486,7 +486,7 @@ def serve(path):
     else:
         return send_from_directory(app.static_folder, 'index.html')
 
-def create_stripe_account_from_action(data):
+def create_stripe_account(data):
     try:
         required_fields = ['email', 'first_name', 'last_name', 'phone', 'iban',
                            'address_line1', 'address_city', 'address_postal_code',
