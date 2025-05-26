@@ -59,7 +59,9 @@ def handle_stripe_action():
             return check_stripe_status()
         elif action == 'upload-document':
             return upload_document()
-        else:
+        elif action == 'create-stripe-account':
+            return create_stripe_account_from_action(data)
+        else: 
             return jsonify({"error": f"Unknown action '{action}'"}), 400
 
     except Exception as e:
@@ -484,6 +486,27 @@ def serve(path):
     else:
         return send_from_directory(app.static_folder, 'index.html')
 
+def create_stripe_account_from_action(data):
+    try:
+        email = data.get("email")
+        if not email:
+            return jsonify({"error": "Email manquant"}), 400
+
+        account = stripe.Account.create(
+            type="express",
+            country="FR",
+            email=email,
+            capabilities={
+                "card_payments": {"requested": True},
+                "transfers": {"requested": True}
+            }
+        )
+
+        return jsonify({"id": account.id})
+    except Exception as e:
+        print("Erreur création compte Stripe:", e)
+        return jsonify({"error": str(e)}), 500
+        
 # Run server
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
