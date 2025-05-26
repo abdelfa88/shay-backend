@@ -223,9 +223,7 @@ def check_stripe_status(data=None):
     try:
         if data is None:
             data = request.json
-
-        account_id = data.get('account_id') if data else None
-
+            account_id = data.get('account_id')
         if not account_id:
             return jsonify({"error": "Missing account_id parameter"}), 400
 
