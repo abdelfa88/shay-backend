@@ -92,29 +92,40 @@ def check_stripe_status_route():
         print(f"Error checking Stripe status: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/upload-document', methods=['POST', 'OPTIONS'])
-def upload_document_route():
-    if request.method == 'OPTIONS':
-        return handle_cors()
-    
+@app.route('/api/upload-document', methods=['POST'])
+def upload_document():
     try:
-        return upload_document()
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part in request"}), 400
+
+        file = request.files['file']
+        account_id = request.form.get('account_id')
+
+        if not file or not account_id:
+            return jsonify({"error": "Missing file or account_id"}), 400
+
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(tempfile.gettempdir(), filename)
+        file.save(filepath)
+
+        with open(filepath, 'rb') as f:
+            upload = stripe.File.create(
+                purpose='identity_document',
+                file={
+                    'data': f.read(),
+                    'name': filename,
+                    'type': file.content_type,
+                },
+                stripe_account=account_id
+            )
+
+        os.remove(filepath)
+        return jsonify({"id": upload.id})
+
     except Exception as e:
         print(f"Error uploading document: {e}")
         return jsonify({"error": str(e)}), 500
-
-@app.route('/api/create-checkout-session', methods=['POST', 'OPTIONS'])
-def create_checkout_session_route():
-    if request.method == 'OPTIONS':
-        return handle_cors()
-    
-    try:
-        data = request.json
-        return create_checkout_session(data)
-    except Exception as e:
-        print(f"Error creating checkout session: {e}")
-        return jsonify({"error": str(e)}), 500
-
+        
 @app.route('/api/create-appointment-checkout', methods=['POST', 'OPTIONS'])
 def create_appointment_checkout_route():
     if request.method == 'OPTIONS':
