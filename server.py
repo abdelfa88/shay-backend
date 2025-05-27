@@ -185,7 +185,7 @@ def create_stripe_account_with_token(data):
                 "currency": "eur",
                 "account_number": iban.replace(" ", "")
             },
-            settings={
+                         settings={
                 "payouts": {
                     "schedule": {
                         "interval": "manual"
@@ -194,7 +194,8 @@ def create_stripe_account_with_token(data):
                 "payments": {
                     "statement_descriptor": "SHAY BEAUTY"
                 }
-             )
+            }
+        )
         
         return jsonify({"id": account.id})
     except stripe.error.StripeError as e:
