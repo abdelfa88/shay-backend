@@ -312,42 +312,43 @@ def create_custom_account(data=None):
 def check_stripe_status(data):
     try:
         account_id = data.get('account_id')
-        
+
         if not account_id:
             return jsonify({"error": "Missing account_id parameter"}), 400
-        
-        try:
-            account = stripe.Account.retrieve(account_id)
-            
-            # Get detailed requirements
-            requirements = account.requirements
-            
-            status = {
-                "isVerified": account.charges_enabled and account.payouts_enabled,
-                "isRestricted": requirements.disabled_reason is not None,
-                "requiresInfo": len(requirements.currently_due) > 0,
-                "pendingRequirements": requirements.currently_due,
-                "currentDeadline": requirements.current_deadline,
-                "capabilities": account.capabilities
-            }
-            
-            return jsonify(status)
-        except stripe.error.StripeError as e:
-            print(f"Stripe error: {e}")
-            # Fallback to simulated status if Stripe API fails
-            return jsonify({
-                "isVerified": False,
-                "isRestricted": False,
-                "requiresInfo": True,
-                "pendingRequirements": ['verification.document.front', 'business_profile.mcc'],
-                "currentDeadline": None,
-                "capabilities": {"card_payments": "inactive", "transfers": "inactive"}
-            })
-            
+
+        account = stripe.Account.retrieve(account_id)
+        requirements = account.requirements
+
+        print("🧠 Stripe Account ID:", account_id)
+        print("✅ Charges enabled:", account.charges_enabled)
+        print("✅ Payouts enabled:", account.payouts_enabled)
+        print("📦 Requirements - currently_due:", requirements.currently_due)
+        print("📦 Requirements - disabled_reason:", requirements.disabled_reason)
+        if hasattr(account, "individual") and hasattr(account.individual, "verification"):
+            print("🪪 Document Status:", getattr(account.individual.verification, 'status', None))
+            print("🪪 Document Front:", getattr(account.individual.verification.document, 'front', None))
+
+        status = {
+            "isVerified": account.charges_enabled and account.payouts_enabled,
+            "isRestricted": requirements.disabled_reason is not None,
+            "requiresInfo": len(requirements.currently_due) > 0,
+            "pendingRequirements": requirements.currently_due,
+            "currentDeadline": requirements.current_deadline,
+            "capabilities": account.capabilities
+        }
+
+        # ⚠️ PATCH pour éviter que ça bloque dans le vide
+        if status["isRestricted"] and len(status["pendingRequirements"]) == 0:
+            print("⚠️ Compte restreint mais pas de pendingRequirements, on force l'upload d'identité")
+            status["requiresInfo"] = True
+            status["pendingRequirements"] = ["verification.document.front"]
+
+        return jsonify(status)
+
     except Exception as e:
         print(f"Error checking Stripe status: {e}")
         return jsonify({"error": str(e)}), 500
-
+        
 def upload_document():
     try:
         if 'file' not in request.files:
