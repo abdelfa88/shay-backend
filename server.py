@@ -194,13 +194,7 @@ def create_stripe_account_with_token(data):
                 "payments": {
                     "statement_descriptor": "SHAY BEAUTY"
                 }
-            },
-            tos_acceptance={
-                "date": int(tos_date),
-                "ip": request.remote_addr,
-                "service_agreement": "full"
-            }
-        )
+             )
         
         return jsonify({"id": account.id})
     except stripe.error.StripeError as e:
