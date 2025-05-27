@@ -178,7 +178,7 @@ def create_stripe_account_with_token(data):
             },
             business_profile={
                 "url": website or 'https://shaybeauty.fr'
-                "mcc": "7230"  # Salons de beauté
+                "mcc": "7230"  
             },
             external_account={
                 "object": "bank_account",
