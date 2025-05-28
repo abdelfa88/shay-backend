@@ -243,15 +243,23 @@ def create_stripe_account(data):
         # ✅ Ajout ici
         print("📦 Données reçues dans create_stripe_account:", data)
 
-        # Validate required fields
-        required_fields = ['first_name', 'last_name', 'email', 'phone', 
-                          'dob_day', 'dob_month', 'dob_year', 
-                          'address_line1', 'address_city', 'address_postal_code', 'iban']
-        
-        for field in required_fields:
-            if field not in data or not data[field]:
-                return jsonify({"error": f"Missing required field: {field}"}), 400
-                
+        # ✅ Correction : vérifie les champs dans data["individual"] si présents
+individual = data.get('individual', {})
+missing = []
+
+# Champs qui peuvent venir de individual ou de la racine
+for field in ['first_name', 'last_name', 'phone', 'dob_day', 'dob_month', 'dob_year']:
+    if not individual.get(field) and not data.get(field):
+        missing.append(field)
+
+# Champs attendus à la racine
+for field in ['email', 'iban', 'address_line1', 'address_city', 'address_postal_code']:
+    if not data.get(field):
+        missing.append(field)
+
+if missing:
+    return jsonify({"error": f"Missing required field(s): {', '.join(missing)}"}), 400
+    
         # Create Stripe account
         try:
             account = stripe.Account.create(
