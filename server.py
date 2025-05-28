@@ -814,45 +814,6 @@ def serve(path):
         return send_from_directory(app.static_folder, path)
     else:
         return send_from_directory(app.static_folder, 'index.html')
-
-@app.route('/api/create-stripe-account-token', methods=['POST'])
-def create_stripe_account_token():
-    try:
-        data = request.get_json()
-
-        if not data:
-            return jsonify({'error': 'Aucune donnée reçue'}), 400
-
-        # Préparer le payload requis par Stripe
-        account_token = stripe.Account.create_account_token(
-            account={
-                'type': data.get('business_type', 'individual'),
-                'individual': {
-                    'first_name': data.get('first_name'),
-                    'last_name': data.get('last_name'),
-                    'email': data.get('email'),
-                    'phone': data.get('phone'),
-                    'dob': {
-                        'day': int(data.get('dob_day')),
-                        'month': int(data.get('dob_month')),
-                        'year': int(data.get('dob_year')),
-                    },
-                    'address': {
-                        'line1': data.get('address_line1'),
-                        'city': data.get('address_city'),
-                        'postal_code': data.get('address_postal_code'),
-                        'country': data.get('address_country', 'FR'),
-                    },
-                },
-                'tos_shown_and_accepted': True
-            }
-        )
-
-        return jsonify({'token': account_token.id})
-
-    except Exception as e:
-        print("Erreur create-stripe-account-token:", str(e))
-        return jsonify({'error': str(e)}), 500
         
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
