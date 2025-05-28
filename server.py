@@ -240,6 +240,9 @@ def create_stripe_account_with_token(data):
 
 def create_stripe_account(data):
     try:
+        # ✅ Ajout ici
+        print("📦 Données reçues dans create_stripe_account:", data)
+
         # Validate required fields
         required_fields = ['first_name', 'last_name', 'email', 'phone', 
                           'dob_day', 'dob_month', 'dob_year', 
@@ -248,7 +251,7 @@ def create_stripe_account(data):
         for field in required_fields:
             if field not in data or not data[field]:
                 return jsonify({"error": f"Missing required field: {field}"}), 400
-        
+                
         # Create Stripe account
         try:
             account = stripe.Account.create(
