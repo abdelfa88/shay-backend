@@ -37,7 +37,7 @@ MONDIAL_RELAY_API_PASSWORD = '@YeVkNvuZ*py]nSB7:Dq'
 UPLOAD_FOLDER = tempfile.gettempdir()
 
 # Main route for handling all API requests
-@app.route('/api/', methods=['POST', 'OPTIONS'])
+@app.route('/api', methods=['POST', 'OPTIONS'])
 def api_handler():
     if request.method == 'OPTIONS':
         return handle_cors()
