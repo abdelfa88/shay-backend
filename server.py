@@ -240,97 +240,98 @@ def create_stripe_account_with_token(data):
 
 def create_stripe_account(data):
     try:
-        # ✅ Ajout ici
+        # ✅ Log de debug
         print("📦 Données reçues dans create_stripe_account:", data)
 
-        # ✅ Correction : vérifie les champs dans data["individual"] si présents
-individual = data.get('individual', {})
-missing = []
+        # ✅ Vérifie les champs dans data["individual"] si présents
+        individual = data.get('individual', {})
+        missing = []
 
-# Champs qui peuvent venir de individual ou de la racine
-for field in ['first_name', 'last_name', 'phone', 'dob_day', 'dob_month', 'dob_year']:
-    if not individual.get(field) and not data.get(field):
-        missing.append(field)
+        # Champs dans "individual" ou à la racine
+        for field in ['first_name', 'last_name', 'phone', 'dob_day', 'dob_month', 'dob_year']:
+            if not individual.get(field) and not data.get(field):
+                missing.append(field)
 
-# Champs attendus à la racine
-for field in ['email', 'iban', 'address_line1', 'address_city', 'address_postal_code']:
-    if not data.get(field):
-        missing.append(field)
+        # Champs obligatoires à la racine
+        for field in ['email', 'iban', 'address_line1', 'address_city', 'address_postal_code']:
+            if not data.get(field):
+                missing.append(field)
 
-if missing:
-    return jsonify({"error": f"Missing required field(s): {', '.join(missing)}"}), 400
-    
-        # Create Stripe account
-        try:
-            account = stripe.Account.create(
-                type="custom",
-                email=data['email'],
-                country="FR",
-                capabilities={
-                    "card_payments": {"requested": True},
-                    "transfers": {"requested": True}
+        if missing:
+            return jsonify({"error": f"Missing required field(s): {', '.join(missing)}"}), 400
+
+        # ✅ Création du compte Stripe
+        account = stripe.Account.create(
+            type="custom",
+            email=data['email'],
+            country="FR",
+            capabilities={
+                "card_payments": {"requested": True},
+                "transfers": {"requested": True}
+            },
+            business_type=data.get('business_type', 'individual'),
+            business_profile={
+                "name": f"{data['first_name']} {data['last_name']}",
+                "url": data.get('website', 'https://shaybeauty.fr'),
+                "mcc": data.get('business_profile_mcc', '7230')  # par défaut : beauté
+            },
+            individual={
+                "first_name": data['first_name'],
+                "last_name": data['last_name'],
+                "phone": data['phone'],
+                "dob": {
+                    "day": int(data['dob_day']),
+                    "month": int(data['dob_month']),
+                    "year": int(data['dob_year'])
                 },
-                business_type=data.get('business_type', 'individual'),
-                business_profile={
-                    "name": f"{data['first_name']} {data['last_name']}",
-                    "url": data.get('website', 'https://shaybeauty.fr'),
-                    "mcc": data.get('business_profile_mcc', '7230')  # Default to beauty salons
+                "address": {
+                    "line1": data['address_line1'],
+                    "city": data['address_city'],
+                    "postal_code": data['address_postal_code'],
+                    "country": "FR"
                 },
-                individual={
-                    "first_name": data['first_name'],
-                    "last_name": data['last_name'],
-                    "phone": data['phone'],
-                    "dob": {
-                        "day": int(data['dob_day']),
-                        "month": int(data['dob_month']),
-                        "year": int(data['dob_year'])
-                    },
-                    "address": {
-                        "line1": data['address_line1'],
-                        "city": data['address_city'],
-                        "postal_code": data['address_postal_code'],
-                        "country": "FR"
-                    },
-                    "verification": {
-                        "document": {
-                            "front": None  # This forces Stripe to require document verification
-                        }
+                "verification": {
+                    "document": {
+                        "front": None  # Forcer la vérification des documents
                     }
-                },
-                external_account={
-                    "object": "bank_account",
-                    "country": "FR",
-                    "currency": "eur",
-                    "account_number": data['iban'].replace(" ", "")
-                },
-                settings={
-                    "payouts": {
-                        "schedule": {
-                            "interval": "manual"
-                        }
-                    },
-                    "payments": {
-                        "statement_descriptor": "SHAY BEAUTY"
-                    }
-                },
-                tos_acceptance={
-                    "date": int(data.get('tos_date', int(time.time()))),
-                    "ip": request.remote_addr,
-                    "service_agreement": "full"
                 }
-            )
-            return jsonify({"id": account.id})
-        except stripe.error.StripeError as e:
-            print(f"Stripe error: {e}")
-            return jsonify({
-                "error": str(e),
-                "details": e.user_message if hasattr(e, 'user_message') else None
-            }), 400
-        
+            },
+            external_account={
+                "object": "bank_account",
+                "country": "FR",
+                "currency": "eur",
+                "account_number": data['iban'].replace(" ", "")
+            },
+            settings={
+                "payouts": {
+                    "schedule": {
+                        "interval": "manual"
+                    }
+                },
+                "payments": {
+                    "statement_descriptor": "SHAY BEAUTY"
+                }
+            },
+            tos_acceptance={
+                "date": int(data.get('tos_date', int(time.time()))),
+                "ip": request.remote_addr,
+                "service_agreement": "full"
+            }
+        )
+
+        return jsonify({"id": account.id})
+    
+    except stripe.error.StripeError as e:
+        print(f"Stripe error: {e}")
+        return jsonify({
+            "error": str(e),
+            "details": e.user_message if hasattr(e, 'user_message') else None
+        }), 400
+    
     except Exception as e:
         print(f"Error creating Stripe account: {e}")
         return jsonify({"error": str(e)}), 500
-
+        
 def create_custom_account(data=None):
     try:
         # Create a custom Stripe account with minimal information
