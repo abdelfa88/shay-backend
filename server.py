@@ -461,11 +461,15 @@ def upload_document():
                 file_data = f.read()
             
             # Upload file to Stripe
-            file={
-    'data': file_data,
-    'name': filename,
-    'type': file.content_type
-}
+            file_upload = stripe.File.create(
+    purpose=purpose,
+    file={  
+        'data': file_data,
+        'name': filename,
+        'type': file.content_type
+    },
+    stripe_account=account_id
+)
             
             # Clean up temporary file
             os.remove(filepath)
