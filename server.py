@@ -223,7 +223,6 @@ def create_stripe_account_with_token(data):
                             "front": None  # This forces Stripe to require document verification
                         }
                     }
-                }
             )
         except Exception as e:
             print(f"Warning: Could not force document verification: {e}")
