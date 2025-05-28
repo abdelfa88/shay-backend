@@ -853,6 +853,7 @@ def create_stripe_account_token():
     except Exception as e:
         print("Erreur create-stripe-account-token:", str(e))
         return jsonify({'error': str(e)}), 500
+        
         if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"✅ Starting server on port {port}")
