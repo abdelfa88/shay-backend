@@ -432,46 +432,70 @@ def check_stripe_status(data):
         return jsonify({"error": str(e)}), 500
 
 def upload_document():
-    if request.method == 'OPTIONS':
-        return handle_cors()
-
-    if 'file' not in request.files:
-        return jsonify({"error": "Aucun fichier n'a été envoyé"}), 400
-
-    file = request.files['file']
-    account_id = request.form.get('account_id')
-
-    if not account_id:
-        return jsonify({"error": "account_id manquant"}), 400
-    if file.filename == '':
-        return jsonify({"error": "Nom de fichier vide"}), 400
-
     try:
-        # Créer un fichier temporaire
-        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-            file.save(temp_file.name)
-            temp_filename = temp_file.name
-
-        # Réouvrir le fichier en respectant bien le format Stripe
-        with open(temp_filename, 'rb') as f:
-            uploaded_file = stripe.File.create(
-                purpose='identity_document',
-                file={'file': (file.filename, f, file.mimetype)},
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+            
+        file = request.files['file']
+        purpose = request.form.get('purpose')
+        account_id = request.form.get('account_id')
+        
+        if not file or not purpose or not account_id:
+            return jsonify({"error": "Missing required parameters"}), 400
+        
+        try:
+            # Save file to temporary location
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            
+            # Read the file
+            with open(filepath, 'rb') as f:
+                file_data = f.read()
+            
+            # Upload file to Stripe
+            file_upload = stripe.File.create(
+                purpose=purpose,
+                file={
+                    'data': file_data,
+                    'name': filename,
+                    'type': file.content_type
+                },
                 stripe_account=account_id
             )
-
-        os.unlink(temp_filename)
-
-        return jsonify({
-            "message": "Document d'identité téléchargé avec succès",
-            "file_id": uploaded_file.id
-        }), 200
-
-    except stripe.error.StripeError as e:
-        return jsonify({"error": str(e)}), 400
+            
+            # Clean up temporary file
+            os.remove(filepath)
+            
+            # Update the account to use the uploaded document
+            if purpose == 'identity_document':
+                try:
+                    # Update the account with the document
+                    stripe.Account.modify(
+                        account_id,
+                        individual={
+                            "verification": {
+                                "document": {
+                                    "front": file_upload.id
+                                }
+                            }
+                        }
+                    )
+                except Exception as e:
+                    print(f"Warning: Could not update account with document: {e}")
+            
+            return jsonify({"id": file_upload.id})
+        except stripe.error.StripeError as e:
+            print(f"Stripe error: {e}")
+            # Clean up temporary file if it exists
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return jsonify({"error": str(e)}), 400
+            
     except Exception as e:
-        return jsonify({"error": f"Erreur serveur : {str(e)}"}), 500
-        
+        print(f"Error uploading document: {e}")
+        return jsonify({"error": str(e)}), 500
+
 def create_checkout_session(data):
     try:
         # Validate required fields
