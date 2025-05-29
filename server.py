@@ -462,9 +462,10 @@ def upload_document():
             return jsonify({"error": f"File too large ({file_size} > {MAX_SIZE} bytes)"}), 400
         
         try:
-            file_upload = stripe.File.create(
-                purpose=purpose,
-                file= (File.filename, file.stream, file.content_type),
+        with open(file_path, "rb") as file:
+            uploaded_file = stripe.File.create(
+                purpose="identity_document",
+                file=file,
                 stripe_account=account_id
             )
             
