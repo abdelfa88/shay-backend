@@ -464,7 +464,7 @@ def upload_document():
         try:
             file_upload = stripe.File.create(
                 purpose=purpose,
-                file={'file': (file.filename, file.stream, file.content_type)},
+                file= (file.filename, file.stream, file.content_type),
                 stripe_account=account_id
             )
             
