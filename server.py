@@ -431,7 +431,7 @@ def check_stripe_status(data):
         print(f"Error checking Stripe status: {e}")
         return jsonify({"error": str(e)}), 500
 
-def upload_document_route():
+def upload_document():
     if request.method == 'OPTIONS':
         return handle_cors()
 
