@@ -440,67 +440,51 @@ def check_stripe_status(data):
 
 def upload_document():
     try:
-        if 'file' not in request.files:
-            return jsonify({"error": "No file part"}), 400
-            
-        file = request.files['file']
-        purpose = request.form.get('purpose')
-        account_id = request.form.get('account_id')
-        
-        if not file or not purpose or not account_id:
-            return jsonify({"error": "Missing required parameters"}), 400
-        
-        try:
-            # Save file to temporary location
-            filename = secure_filename(file.filename)
-            filepath = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(filepath)
-            
-            # Read the file
-            with open(filepath, 'rb') as f:
-                file_data = f.read()
-            
-            # Upload file to Stripe
-            file_upload = stripe.File.create(
-                purpose=purpose,
-                file={
-                    'data': file_data,
-                    'name': filename,
-                    'type': file.content_type
-                },
-                stripe_account=account_id
-            )
-            
-            # Clean up temporary file
-            os.remove(filepath)
-            
-            # Update the account to use the uploaded document
-            if purpose == 'identity_document':
-                try:
-                    # Update the account with the document
-                    stripe.Account.modify(
-                        account_id,
-                        individual={
-                            "verification": {
-                                "document": {
-                                    "front": file_upload.id
-                                }
-                            }
+        file = request.files.get("file")
+        purpose = request.form.get("purpose", "identity_document")
+        account_id = request.form.get("account_id")
+
+        if not file:
+            return jsonify({"error": "No file provided"}), 400
+        if not account_id:
+            return jsonify({"error": "Missing account ID"}), 400
+
+        # Vérification de la taille du fichier
+        MAX_SIZE = 8 * 1024 * 1024  # 8MB
+        file.seek(0, 2)
+        file_size = file.tell()
+        file.seek(0)
+        if file_size > MAX_SIZE:
+            return jsonify({"error": f"File too large ({file_size} > {MAX_SIZE})"}), 400
+
+        # Upload vers Stripe
+        stripe_file = stripe.File.create(
+            purpose=purpose,
+            file={
+                "file": file.stream,
+                "filename": file.filename,
+                "content_type": file.content_type
+            },
+            stripe_account=account_id
+        )
+
+        # Si c’est un document d’identité : lien au compte
+        if purpose == "identity_document":
+            stripe.Account.modify(
+                account_id,
+                individual={
+                    "verification": {
+                        "document": {
+                            "front": stripe_file.id
                         }
-                    )
-                except Exception as e:
-                    print(f"Warning: Could not update account with document: {e}")
-            
-            return jsonify({"id": file_upload.id})
-        except stripe.error.StripeError as e:
-            print(f"Stripe error: {e}")
-            # Clean up temporary file if it exists
-            if os.path.exists(filepath):
-                os.remove(filepath)
-            return jsonify({"error": str(e)}), 400
-            
+                    }
+                }
+            )
+
+        return jsonify({"id": stripe_file.id})
+
     except Exception as e:
-        print(f"Error uploading document: {e}")
+        print("Erreur dans upload:", str(e))
         return jsonify({"error": str(e)}), 500
         
 def create_checkout_session(data):
