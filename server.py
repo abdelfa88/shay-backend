@@ -431,52 +431,57 @@ def check_stripe_status(data):
         print(f"Error checking Stripe status: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/upload-document', methods=['POST', 'OPTIONS'])
 def upload_document_route():
     if request.method == 'OPTIONS':
-        response = jsonify({"message": "CORS preflight OK"})
-        response.headers.add("Access-Control-Allow-Origin", "*")
-        response.headers.add("Access-Control-Allow-Headers", "Content-Type, Authorization")
-        response.headers.add("Access-Control-Allow-Methods", "POST, OPTIONS")
-        return response
+        return handle_cors()
+
+    if 'file' not in request.files:
+        return jsonify({"error": "Aucun fichier n'a été envoyé"}), 400
+
+    file = request.files['file']
+    account_id = request.form.get('account_id')
+
+    if not account_id:
+        return jsonify({"error": "account_id manquant"}), 400
+
+    if file.filename == '':
+        return jsonify({"error": "Nom de fichier vide"}), 400
+
+    if not allowed_file(file.filename):
+        return jsonify({"error": "Type de fichier non autorisé"}), 400
+
+    if request.content_length > MAX_FILE_SIZE:
+        return jsonify({"error": "Taille du fichier dépassée"}), 400
 
     try:
-        if 'file' not in request.files:
-            response = jsonify({"error": "Aucun fichier n'a été envoyé"}), 400
-        else:
-            file = request.files['file']
-            account_id = request.form.get('account_id')
-            purpose = request.form.get('purpose', 'identity_document')
-
-            if not account_id:
-                response = jsonify({"error": "account_id manquant"}), 400
-            elif file.filename == '':
-                response = jsonify({"error": "Nom de fichier vide"}), 400
-            else:
-                with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                    file.save(temp_file.name)
-                    temp_filename = temp_file.name
-
-                with open(temp_filename, 'rb') as f:
-                    uploaded_file = stripe.File.create(
-                        purpose=purpose,
-                        file={'file': (file.filename, f, file.mimetype)},
-                        stripe_account=account_id
-                    )
-
-                os.unlink(temp_filename)
-
-                response = jsonify({
-                    "message": "Document d'identité téléchargé avec succès",
-                    "file_id": uploaded_file.id
-                }), 200
-
+        # Créer un fichier temporaire avec un nom sécurisé
+        filename = secure_filename(file.filename)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(filename)[1]) as temp_file:
+            file.save(temp_file.name)
+            
+            # Uploader le fichier vers Stripe
+            with open(temp_file.name, 'rb') as file_data:
+                uploaded_file = stripe.File.create(
+                    purpose='identity_document',
+                    file=file_data,
+                    stripe_account=account_id
+                )
+        
+        # Supprimer le fichier temporaire
+        os.unlink(temp_file.name)
+        
+        return jsonify({
+            "message": "Document d'identité téléchargé avec succès",
+            "file_id": uploaded_file.id
+        }), 200
+    
     except stripe.error.StripeError as e:
-        response = jsonify({"error": str(e)}), 400
+        app.logger.error(f"Erreur Stripe: {str(e)}")
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
-        print(f"[❌ Serveur] Exception upload: {e}")
-        response = jsonify({"error": f"Erreur serveur : {str(e)}"}), 500
-
+        app.logger.error(f"Erreur inattendue: {str(e)}")
+        return jsonify({"error": "Une erreur inattendue s'est produite"}), 500
+        
     # CORS HEADERS ajoutés à la réponse finale
     final_response = response[0] if isinstance(response, tuple) else response
     status_code = response[1] if isinstance(response, tuple) else 200
