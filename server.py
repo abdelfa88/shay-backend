@@ -442,57 +442,61 @@ def upload_document():
     try:
         if 'file' not in request.files:
             return jsonify({"error": "No file part"}), 400
-            
+
         file = request.files['file']
         purpose = request.form.get('purpose', 'identity_document')
         account_id = request.form.get('account_id')
-        
+
         if not file or file.filename == '':
             return jsonify({"error": "No selected file"}), 400
         if not account_id:
             return jsonify({"error": "Missing account ID"}), 400
-        
-        # Vérification de la taille du fichier (max 8MB)
+
+        # Vérifie la taille du fichier
         MAX_SIZE = 8 * 1024 * 1024  # 8MB
-        file.seek(0, 2)  # Aller à la fin du fichier
+        file.seek(0, 2)
         file_size = file.tell()
-        file.seek(0)  # Retourner au début
-        
+        file.seek(0)
+
         if file_size > MAX_SIZE:
             return jsonify({"error": f"File too large ({file_size} > {MAX_SIZE} bytes)"}), 400
-        
-        try:
-            file_upload = stripe.File.create(
-    purpose=purpose,
-    file=(file.filename, file.stream, file.content_type),
-    stripe_account=account_id
-)
-            
-            # Mise à jour facultative du compte
-            if purpose in ['identity_document', 'verification.document.front']:
-                try:
-                    stripe.Account.modify(
-                        account_id,
-                        individual={
-                            "verification": {
-                                "document": {
-                                    "front": file_upload.id
-                                }
+
+        # Préparer le flux correctement pour Stripe
+        file.stream.seek(0)
+        file.stream.name = file.filename  # Nécessaire pour Stripe
+
+        file_upload = stripe.File.create(
+            purpose=purpose,
+            file=file.stream,
+            stripe_account=account_id
+        )
+
+        # Mise à jour du compte Stripe avec le document
+        if purpose in ['identity_document', 'verification.document.front']:
+            try:
+                stripe.Account.modify(
+                    account_id,
+                    individual={
+                        "verification": {
+                            "document": {
+                                "front": file_upload.id
                             }
                         }
-                    )
-                except stripe.error.StripeError as e:
-                    print(f"Stripe account update warning: {e}")
-            
-            return jsonify({"id": file_upload.id})
-            
-        except stripe.error.StripeError as e:
-            return jsonify({
-                "error": "Stripe upload failed",
-                "details": str(e),
-                "code": e.code
-            }), 400
-            
+                    }
+                )
+            except stripe.error.StripeError as e:
+                print(f"Stripe account update warning: {e}")
+
+        return jsonify({"id": file_upload.id})
+
+    except stripe.error.StripeError as e:
+        print(f"Stripe upload error: {e}")
+        return jsonify({
+            "error": "Stripe upload failed",
+            "details": str(e),
+            "code": getattr(e, "code", "unknown")
+        }), 400
+
     except Exception as e:
         print(f"Unexpected error in upload: {e}")
         return jsonify({"error": "Internal server error"}), 500
