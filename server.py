@@ -440,52 +440,62 @@ def check_stripe_status(data):
 
 def upload_document():
     try:
-        file = request.files.get("file")
-        purpose = request.form.get("purpose", "identity_document")
-        account_id = request.form.get("account_id")
-
-        if not file:
-            return jsonify({"error": "No file provided"}), 400
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+            
+        file = request.files['file']
+        purpose = request.form.get('purpose', 'identity_document')
+        account_id = request.form.get('account_id')
+        
+        if not file or file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
         if not account_id:
             return jsonify({"error": "Missing account ID"}), 400
-
-        # Vérification de la taille du fichier
+        
+        # Vérification de la taille du fichier (max 8MB)
         MAX_SIZE = 8 * 1024 * 1024  # 8MB
-        file.seek(0, 2)
+        file.seek(0, 2)  # Aller à la fin du fichier
         file_size = file.tell()
-        file.seek(0)
+        file.seek(0)  # Retourner au début
+        
         if file_size > MAX_SIZE:
-            return jsonify({"error": f"File too large ({file_size} > {MAX_SIZE})"}), 400
-
-        # Upload vers Stripe
-        stripe_file = stripe.File.create(
-            purpose=purpose,
-            file={
-                "file": file.stream,
-                "filename": file.filename,
-                "content_type": file.content_type
-            },
-            stripe_account=account_id
-        )
-
-        # Si c’est un document d’identité : lien au compte
-        if purpose == "identity_document":
-            stripe.Account.modify(
-                account_id,
-                individual={
-                    "verification": {
-                        "document": {
-                            "front": stripe_file.id
-                        }
-                    }
-                }
+            return jsonify({"error": f"File too large ({file_size} > {MAX_SIZE} bytes)"}), 400
+        
+        try:
+            file_upload = stripe.File.create(
+                purpose=purpose,
+                files={'file': (file.filename, file.stream, file.content_type)},
+                stripe_account=account_id
             )
-
-        return jsonify({"id": stripe_file.id})
-
+            
+            # Mise à jour facultative du compte
+            if purpose in ['identity_document', 'verification.document.front']:
+                try:
+                    stripe.Account.modify(
+                        account_id,
+                        individual={
+                            "verification": {
+                                "document": {
+                                    "front": file_upload.id
+                                }
+                            }
+                        }
+                    )
+                except stripe.error.StripeError as e:
+                    print(f"Stripe account update warning: {e}")
+            
+            return jsonify({"id": file_upload.id})
+            
+        except stripe.error.StripeError as e:
+            return jsonify({
+                "error": "Stripe upload failed",
+                "details": str(e),
+                "code": e.code
+            }), 400
+            
     except Exception as e:
-        print("Erreur dans upload:", str(e))
-        return jsonify({"error": str(e)}), 500
+        print(f"Unexpected error in upload: {e}")
+        return jsonify({"error": "Internal server error"}), 500
         
 def create_checkout_session(data):
     try:
