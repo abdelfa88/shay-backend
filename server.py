@@ -208,7 +208,12 @@ def create_stripe_account_with_token(data):
                 "payments": {
                     "statement_descriptor": "SHAY BEAUTY"
                 }
-              }
+            },
+            tos_acceptance={
+                "date": int(tos_date),
+                "ip": request.remote_addr,
+                "service_agreement": "full"
+            }
         )
         
         # Force account to require document verification
@@ -240,98 +245,86 @@ def create_stripe_account_with_token(data):
 
 def create_stripe_account(data):
     try:
-        # ✅ Log de debug
-        print("📦 Données reçues dans create_stripe_account:", data)
-
-        # ✅ Vérifie les champs dans data["individual"] si présents
-        individual = data.get('individual', {})
-        missing = []
-
-        # Champs dans "individual" ou à la racine
-        for field in ['first_name', 'last_name', 'phone', 'dob_day', 'dob_month', 'dob_year']:
-            if not individual.get(field) and not data.get(field):
-                missing.append(field)
-
-        # Champs obligatoires à la racine
-        for field in ['email', 'iban', 'address_line1', 'address_city', 'address_postal_code']:
-            if not data.get(field):
-                missing.append(field)
-
-        if missing:
-            return jsonify({"error": f"Missing required field(s): {', '.join(missing)}"}), 400
-
-        # ✅ Création du compte Stripe
-        account = stripe.Account.create(
-            type="custom",
-            email=data['email'],
-            country="FR",
-            capabilities={
-                "card_payments": {"requested": True},
-                "transfers": {"requested": True}
-            },
-            business_type=data.get('business_type', 'individual'),
-            business_profile={
-                "name": f"{data['first_name']} {data['last_name']}",
-                "url": data.get('website', 'https://shaybeauty.fr'),
-                "mcc": data.get('business_profile_mcc', '7230')  # par défaut : beauté
-            },
-            individual={
-                "first_name": data['first_name'],
-                "last_name": data['last_name'],
-                "phone": data['phone'],
-                "dob": {
-                    "day": int(data['dob_day']),
-                    "month": int(data['dob_month']),
-                    "year": int(data['dob_year'])
+        # Validate required fields
+        required_fields = ['first_name', 'last_name', 'email', 'phone', 
+                          'dob_day', 'dob_month', 'dob_year', 
+                          'address_line1', 'address_city', 'address_postal_code', 'iban']
+        
+        for field in required_fields:
+            if field not in data or not data[field]:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+        
+        # Create Stripe account
+        try:
+            account = stripe.Account.create(
+                type="custom",
+                email=data['email'],
+                country="FR",
+                capabilities={
+                    "card_payments": {"requested": True},
+                    "transfers": {"requested": True}
                 },
-                "address": {
-                    "line1": data['address_line1'],
-                    "city": data['address_city'],
-                    "postal_code": data['address_postal_code'],
-                    "country": "FR"
+                business_type=data.get('business_type', 'individual'),
+                business_profile={
+                    "name": f"{data['first_name']} {data['last_name']}",
+                    "url": data.get('website', 'https://shaybeauty.fr'),
+                    "mcc": data.get('business_profile_mcc', '7230')  # Default to beauty salons
                 },
-                "verification": {
-                    "document": {
-                        "front": None  # Forcer la vérification des documents
-                    }
-                }
-            },
-            external_account={
-                "object": "bank_account",
-                "country": "FR",
-                "currency": "eur",
-                "account_number": data['iban'].replace(" ", "")
-            },
-            settings={
-                "payouts": {
-                    "schedule": {
-                        "interval": "manual"
+                individual={
+                    "first_name": data['first_name'],
+                    "last_name": data['last_name'],
+                    "phone": data['phone'],
+                    "dob": {
+                        "day": int(data['dob_day']),
+                        "month": int(data['dob_month']),
+                        "year": int(data['dob_year'])
+                    },
+                    "address": {
+                        "line1": data['address_line1'],
+                        "city": data['address_city'],
+                        "postal_code": data['address_postal_code'],
+                        "country": "FR"
+                    },
+                    "verification": {
+                        "document": {
+                            "front": None  # This forces Stripe to require document verification
+                        }
                     }
                 },
-                "payments": {
-                    "statement_descriptor": "SHAY BEAUTY"
+                external_account={
+                    "object": "bank_account",
+                    "country": "FR",
+                    "currency": "eur",
+                    "account_number": data['iban'].replace(" ", "")
+                },
+                settings={
+                    "payouts": {
+                        "schedule": {
+                            "interval": "manual"
+                        }
+                    },
+                    "payments": {
+                        "statement_descriptor": "SHAY BEAUTY"
+                    }
+                },
+                tos_acceptance={
+                    "date": int(data.get('tos_date', int(time.time()))),
+                    "ip": request.remote_addr,
+                    "service_agreement": "full"
                 }
-            },
-            tos_acceptance={
-                "date": int(data.get('tos_date', int(time.time()))),
-                "ip": request.remote_addr,
-                "service_agreement": "full"
-            }
-        )
-
-        return jsonify({"id": account.id})
-    
-    except stripe.error.StripeError as e:
-        print(f"Stripe error: {e}")
-        return jsonify({
-            "error": str(e),
-            "details": e.user_message if hasattr(e, 'user_message') else None
-        }), 400
-    
+            )
+            return jsonify({"id": account.id})
+        except stripe.error.StripeError as e:
+            print(f"Stripe error: {e}")
+            return jsonify({
+                "error": str(e),
+                "details": e.user_message if hasattr(e, 'user_message') else None
+            }), 400
+        
     except Exception as e:
         print(f"Error creating Stripe account: {e}")
         return jsonify({"error": str(e)}), 500
-        
+
 def create_custom_account(data=None):
     try:
         # Create a custom Stripe account with minimal information
@@ -438,65 +431,46 @@ def check_stripe_status(data):
         print(f"Error checking Stripe status: {e}")
         return jsonify({"error": str(e)}), 500
 
-def upload_document():
+def upload_document_route():
+    if request.method == 'OPTIONS':
+        return handle_cors()
+
+    if 'file' not in request.files:
+        return jsonify({"error": "Aucun fichier n'a été envoyé"}), 400
+
+    file = request.files['file']
+    account_id = request.form.get('account_id')
+
+    if not account_id:
+        return jsonify({"error": "account_id manquant"}), 400
+    if file.filename == '':
+        return jsonify({"error": "Nom de fichier vide"}), 400
+
     try:
-        if 'file' not in request.files:
-            return jsonify({"error": "No file part"}), 400
-            
-        file = request.files['file']
-        purpose = request.form.get('purpose', 'identity_document')
-        account_id = request.form.get('account_id')
-        
-        if not file or file.filename == '':
-            return jsonify({"error": "No selected file"}), 400
-        if not account_id:
-            return jsonify({"error": "Missing account ID"}), 400
-        
-        # Vérification de la taille du fichier (max 8MB)
-        MAX_SIZE = 8 * 1024 * 1024  # 8MB
-        file.seek(0, 2)  # Aller à la fin du fichier
-        file_size = file.tell()
-        file.seek(0)  # Retourner au début
-        
-        if file_size > MAX_SIZE:
-            return jsonify({"error": f"File too large ({file_size} > {MAX_SIZE} bytes)"}), 400
-        
-        try:
-        with open(file_path, "rb") as file:
+        # Créer un fichier temporaire
+        with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+            file.save(temp_file.name)
+            temp_filename = temp_file.name
+
+        # Réouvrir le fichier en respectant bien le format Stripe
+        with open(temp_filename, 'rb') as f:
             uploaded_file = stripe.File.create(
-                purpose="identity_document",
-                file=file,
+                purpose='identity_document',
+                file={'file': (file.filename, f, file.mimetype)},
                 stripe_account=account_id
             )
-            
-            # Mise à jour facultative du compte
-            if purpose in ['identity_document', 'verification.document.front']:
-                try:
-                    stripe.Account.modify(
-                        account_id,
-                        individual={
-                            "verification": {
-                                "document": {
-                                    "front": file_upload.id
-                                }
-                            }
-                        }
-                    )
-                except stripe.error.StripeError as e:
-                    print(f"Stripe account update warning: {e}")
-            
-            return jsonify({"id": file_upload.id})
-            
-        except stripe.error.StripeError as e:
-            return jsonify({
-                "error": "Stripe upload failed",
-                "details": str(e),
-                "code": e.code
-            }), 400
-            
+
+        os.unlink(temp_filename)
+
+        return jsonify({
+            "message": "Document d'identité téléchargé avec succès",
+            "file_id": uploaded_file.id
+        }), 200
+
+    except stripe.error.StripeError as e:
+        return jsonify({"error": str(e)}), 400
     except Exception as e:
-        print(f"Unexpected error in upload: {e}")
-        return jsonify({"error": "Internal server error"}), 500
+        return jsonify({"error": f"Erreur serveur : {str(e)}"}), 500
         
 def create_checkout_session(data):
     try:
@@ -809,9 +783,8 @@ def serve(path):
         return send_from_directory(app.static_folder, path)
     else:
         return send_from_directory(app.static_folder, 'index.html')
-        
+
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
     print(f"✅ Starting server on port {port}")
     app.run(host='0.0.0.0', port=port, debug=True)
-    
