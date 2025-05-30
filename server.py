@@ -177,7 +177,7 @@ def create_stripe_account_with_token(data):
                 "transfers": {"requested": True}
             },
             business_profile={
-                "url": website or 'https://shaybeauty.fr'
+                "url": website or 'https://shaybeauty.fr',
                 "mcc": "7230"  
             },
             external_account={
