@@ -313,13 +313,7 @@ def create_custom_account(data=None):
         print(f"Error creating custom Stripe account: {e}")
         return jsonify({"error": str(e)}), 500
 
-def try:
-    account = stripe.Account.retrieve(account_id)
-    print(f"Account retrieved: {account}")
-except stripe.error.StripeError as e:
-    print(f"Stripe error while retrieving account: {e}")
-    # Fallback logic 
-    # check_stripe_status(data):
+def check_stripe_status(data):
     try:
         account_id = data.get('account_id')
         
