@@ -4,5 +4,5 @@ python-dotenv==1.0.0
 gunicorn==20.1.0
 werkzeug==2.2.3
 supabase
-stripe==13.11.0
+stripe==8.6.0
 requests==2.31.0
