@@ -62,9 +62,9 @@ def create_stripe_account():
             email=data['email'],
             country="FR",
             capabilities={
-                card_payments={"requested": True},
-                transfers={"requested": True}
-            },
+    "card_payments": {"requested": True},
+    "transfers": {"requested": True}
+},
             business_type=data.get('business_type', 'individual'),
             business_profile={
                 "name": f"{data['first_name']} {data['last_name']}",
