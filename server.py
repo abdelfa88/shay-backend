@@ -90,7 +90,7 @@ def create_stripe_account():
                 "object": "bank_account",
                 "country": "FR",
                 "currency": "eur",
-                "account_number": data['iban'].replace(/\s/g, "")
+                "account_number": data['iban'].replace(" ", "")
             },
             settings={
                 "payouts": {
