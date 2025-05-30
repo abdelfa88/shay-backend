@@ -85,18 +85,36 @@ def upload_document_route():
                 purpose='identity_document',
                 file=file,
                 stripe_account=account_id
-             )
+            )
 
-        print("✅ Fichier envoyé à Stripe :", file_upload.id)
+            # Associer le document au compte Stripe
+            try:
+    token = stripe.Token.create(
+        account={
+           "individual": {
+              "verification": {
+                "document": {
+                    "front": file_upload.id
+                }
+            }
+        }
+    }
+)
 
-        # ⚠️ Ne pas modifier le compte manuellement (cas account_token)
-        # Stripe détecte automatiquement le document uploadé
-        return jsonify({"success": True, "file_id": file_upload.id}), 200
+# Appliquer le token à ce compte
+stripe.Account.modify(
+    account_id,
+    account_token=token.id
+)            except stripe.error.StripeError as update_error:
+                print(f"Document association warning: {update_error}")
+                # Ne pas échouer car le fichier est déjà uploadé
+                return jsonify({
+                    "success": True,
+                    "file_id": file_upload.id,
+                    "warning": "Document uploaded but account update failed",
+                    "message": str(update_error)
+                }), 200
 
-    except stripe.error.StripeError as e:
-        print("❌ Erreur Stripe upload:", e)
-        return jsonify({"error": str(e)}), 400
-        
             return jsonify({
                 "success": True,
                 "file_id": file_upload.id
