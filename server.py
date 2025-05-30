@@ -178,6 +178,7 @@ def create_stripe_account_with_token(data):
             },
             business_profile={
                 "url": website or 'https://shaybeauty.fr'
+                "mcc": "7230"  
             },
             external_account={
                 "object": "bank_account",
@@ -185,7 +186,7 @@ def create_stripe_account_with_token(data):
                 "currency": "eur",
                 "account_number": iban.replace(" ", "")
             },
-            settings={
+                         settings={
                 "payouts": {
                     "schedule": {
                         "interval": "manual"
@@ -194,11 +195,6 @@ def create_stripe_account_with_token(data):
                 "payments": {
                     "statement_descriptor": "SHAY BEAUTY"
                 }
-            },
-            tos_acceptance={
-                "date": int(tos_date),
-                "ip": request.remote_addr,
-                "service_agreement": "full"
             }
         )
         
