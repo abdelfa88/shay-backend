@@ -36,93 +36,6 @@ MONDIAL_RELAY_API_PASSWORD = '@YeVkNvuZ*py]nSB7:Dq'
 # Temporary directory for file uploads
 UPLOAD_FOLDER = tempfile.gettempdir()
 
-# ========================================================
-# UPDATED UPLOAD DOCUMENT FUNCTION
-# ========================================================
-# MODIFIED UPLOAD DOCUMENT FUNCTION
-@app.route('/api/upload-document', methods=['POST', 'OPTIONS'])
-def upload_document_route():
-    if request.method == 'OPTIONS':
-        return handle_cors()
-    
-    try:
-        # Vérifier l'authentification
-        if not verify_auth_token(request.headers.get('Authorization')):
-            return jsonify({"error": "Unauthorized"}), 401
-
-        # Vérifier la présence du fichier
-        if 'file' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
-        
-        file = request.files['file']
-        account_id = request.form.get('account_id')
-        
-        if not account_id:
-            return jsonify({"error": "Missing account_id parameter"}), 400
-
-        # Validation du fichier
-        if file.filename == '':
-            return jsonify({"error": "Empty filename"}), 400
-        
-        filename = secure_filename(file.filename)
-        file_ext = os.path.splitext(filename)[1].lower()
-        
-        # Vérifier l'extension
-        if file_ext not in ['.jpg', '.jpeg', '.png', '.pdf']:
-            return jsonify({"error": "Invalid file type. Only JPG, PNG, PDF are allowed"}), 400
-
-        # Vérifier la taille du fichier (max 8MB)
-        max_size = 8 * 1024 * 1024  # 8MB
-        file.seek(0, os.SEEK_END)
-        file_length = file.tell()
-        file.seek(0)
-        
-        if file_length > max_size:
-            return jsonify({"error": f"File too large (max {max_size//1024//1024}MB)"}), 400
-
-        # Upload vers Stripe
-        file_upload = stripe.File.create(
-            purpose='identity_document',
-            file=file,
-            stripe_account=account_id
-        )
-
-        # Créer un token contenant le document et appliquer au compte
-        token = stripe.Token.create(
-            account={
-                "individual": {
-                    "verification": {
-                        "document": {
-                            "front": file_upload.id
-                        }
-                    }
-                }
-            }
-        )
-
-        stripe.Account.modify(
-            account_id,
-            account_token=token.id
-        )
-
-        return jsonify({
-            "success": True,
-            "file_id": file_upload.id
-        }), 200
-
-    except stripe.error.StripeError as e:
-        return jsonify({
-            "error": "Stripe upload failed",
-            "message": str(e),
-            "user_message": e.user_message if hasattr(e, 'user_message') else None
-        }), 400
-    except Exception as e:
-        return jsonify({
-            "error": "Server error during upload",
-            "message": str(e)
-        }), 500
-        # ========================================================
-
 # Main route for handling all API requests
 @app.route('/api/', methods=['POST', 'OPTIONS'])
 def api_handler():
@@ -189,6 +102,17 @@ def check_stripe_status_route():
         return check_stripe_status(data)
     except Exception as e:
         print(f"Error checking Stripe status: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/upload-document', methods=['POST', 'OPTIONS'])
+def upload_document_route():
+    if request.method == 'OPTIONS':
+        return handle_cors()
+    
+    try:
+        return upload_document()
+    except Exception as e:
+        print(f"Error uploading document: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/create-checkout-session', methods=['POST', 'OPTIONS'])
@@ -507,6 +431,71 @@ def check_stripe_status(data):
         print(f"Error checking Stripe status: {e}")
         return jsonify({"error": str(e)}), 500
 
+def upload_document():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+            
+        file = request.files['file']
+        purpose = request.form.get('purpose')
+        account_id = request.form.get('account_id')
+        
+        if not file or not purpose or not account_id:
+            return jsonify({"error": "Missing required parameters"}), 400
+        
+        try:
+            # Save file to temporary location
+            filename = secure_filename(file.filename)
+            filepath = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(filepath)
+            
+            # Read the file
+            with open(filepath, 'rb') as f:
+                file_data = f.read()
+            
+            # Upload file to Stripe
+            file_upload = stripe.File.create(
+                purpose=purpose,
+                file={
+                    'data': file_data,
+                    'name': filename,
+                    'type': file.content_type
+                },
+                stripe_account=account_id
+            )
+            
+            # Clean up temporary file
+            os.remove(filepath)
+            
+            # Update the account to use the uploaded document
+            if purpose == 'identity_document':
+                try:
+                    # Update the account with the document
+                    stripe.Account.modify(
+                        account_id,
+                        individual={
+                            "verification": {
+                                "document": {
+                                    "front": file_upload.id
+                                }
+                            }
+                        }
+                    )
+                except Exception as e:
+                    print(f"Warning: Could not update account with document: {e}")
+            
+            return jsonify({"id": file_upload.id})
+        except stripe.error.StripeError as e:
+            print(f"Stripe error: {e}")
+            # Clean up temporary file if it exists
+            if os.path.exists(filepath):
+                os.remove(filepath)
+            return jsonify({"error": str(e)}), 400
+            
+    except Exception as e:
+        print(f"Error uploading document: {e}")
+        return jsonify({"error": str(e)}), 500
+
 def create_checkout_session(data):
     try:
         # Validate required fields
@@ -809,12 +798,6 @@ def handle_cors():
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
     response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
     return response
-
-def verify_auth_token(token):
-    """Exemple de vérification de token"""
-    # TODO: Implémentez votre logique d'authentification réelle ici
-    # Pour l'instant, on retourne toujours True
-    return True
 
 # Serve static files from the dist directory
 @app.route('/', defaults={'path': ''})
