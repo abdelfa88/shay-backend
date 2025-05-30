@@ -80,56 +80,47 @@ def upload_document_route():
         if file_length > max_size:
             return jsonify({"error": f"File too large (max {max_size//1024//1024}MB)"}), 400
 
-        try:
-            # Upload vers Stripe
-            file_upload = stripe.File.create(
-                purpose='identity_document',
-                file=file,
-                stripe_account=account_id
-            )
+        # Upload vers Stripe
+        file_upload = stripe.File.create(
+            purpose='identity_document',
+            file=file,
+            stripe_account=account_id
+        )
 
-            # Créer un token pour la mise à jour
-            token = stripe.Token.create(
-                account={
-                    "individual": {
-                        "verification": {
-                            "document": {
-                                "front": file_upload.id
-                            }
+        # Créer un token contenant le document et appliquer au compte
+        token = stripe.Token.create(
+            account={
+                "individual": {
+                    "verification": {
+                        "document": {
+                            "front": file_upload.id
                         }
                     }
-                },
-                stripe_account=account_id  # Important: spécifier le compte
-            )
+                }
+            }
+        )
 
-            # Appliquer le token au compte
-            updated_account = stripe.Account.modify(
-                account_id,
-                account_token=token.id
-            )
+        stripe.Account.modify(
+            account_id,
+            account_token=token.id
+        )
 
-            return jsonify({
-                "success": True,
-                "file_id": file_upload.id,
-                "account_status": updated_account.individual.verification.status
-            }), 200
+        return jsonify({
+            "success": True,
+            "file_id": file_upload.id
+        }), 200
 
-        except stripe.error.StripeError as e:
-            return jsonify({
-                "error": "Stripe operation failed",
-                "message": str(e),
-                "user_message": e.user_message if hasattr(e, 'user_message') else None,
-                "code": e.code if hasattr(e, 'code') else None
-            }), 400
-        except Exception as e:
-            return jsonify({
-                "error": "Server error during upload",
-                "message": str(e)
-            }), 500
-            
+    except stripe.error.StripeError as e:
+        return jsonify({
+            "error": "Stripe upload failed",
+            "message": str(e),
+            "user_message": e.user_message if hasattr(e, 'user_message') else None
+        }), 400
     except Exception as e:
-        print(f"Error in document upload: {e}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({
+            "error": "Server error during upload",
+            "message": str(e)
+        }), 500
         # ========================================================
 
 # Main route for handling all API requests
