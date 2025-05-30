@@ -87,18 +87,6 @@ def upload_document_route():
                 stripe_account=account_id
             )
 
-            # Associer le document au compte Stripe
-            try:
-                stripe.Account.modify(
-                    account_id,
-                    individual={
-                        "verification": {
-                            "document": {
-                                "front": file_upload.id
-                            }
-                        }
-                    }
-                )
             except stripe.error.StripeError as update_error:
                 print(f"Document association warning: {update_error}")
                 # Ne pas échouer car le fichier est déjà uploadé
