@@ -60,18 +60,6 @@ def api_handler():
             return check_stripe_status(data)
         elif action == 'create-custom-account':
             return create_custom_account(data)
-        elif action == 'create-checkout-session':
-            return create_checkout_session(data)
-        elif action == 'create-appointment-checkout':
-            return create_appointment_checkout(data)
-        elif action == 'create-boost-session':
-            return create_boost_session(data)
-        elif action == 'get-relay-points':
-            return get_relay_points(data)
-        elif action == 'create-shipping-label':
-            return create_shipping_label(data)
-        elif action == 'test':
-            return jsonify({"message": "API test successful", "received": data}), 200
         else:
             return jsonify({"error": f"Unknown action: {action}"}), 400
     
@@ -170,7 +158,6 @@ def create_stripe_account_with_token(data):
         email = data.get('email')
         iban = data.get('iban')
         website = data.get('website')
-        mcc = data.get('mcc', '7230')  # Default to beauty salons
         tos_date = data.get('tos_date', int(time.time()))
         
         if not account_token:
@@ -190,8 +177,7 @@ def create_stripe_account_with_token(data):
                 "transfers": {"requested": True}
             },
             business_profile={
-                "url": website or 'https://shaybeauty.fr',
-                "mcc": mcc
+                "url": website or 'https://shaybeauty.fr'
             },
             external_account={
                 "object": "bank_account",
@@ -215,22 +201,6 @@ def create_stripe_account_with_token(data):
                 "service_agreement": "full"
             }
         )
-        
-        # Force account to require document verification
-        try:
-            # This will trigger document verification requirements
-            stripe.Account.modify(
-                account.id,
-                individual={
-                    "verification": {
-                        "document": {
-                            "front": None  # This forces Stripe to require document verification
-                        }
-                    }
-                }
-            )
-        except Exception as e:
-            print(f"Warning: Could not force document verification: {e}")
         
         return jsonify({"id": account.id})
     except stripe.error.StripeError as e:
@@ -284,11 +254,6 @@ def create_stripe_account(data):
                         "city": data['address_city'],
                         "postal_code": data['address_postal_code'],
                         "country": "FR"
-                    },
-                    "verification": {
-                        "document": {
-                            "front": None  # This forces Stripe to require document verification
-                        }
                     }
                 },
                 external_account={
@@ -336,13 +301,6 @@ def create_custom_account(data=None):
                 "transfers": {"requested": True}
             },
             business_type="individual",
-            individual={
-                "verification": {
-                    "document": {
-                        "front": None  # This forces Stripe to require document verification
-                    }
-                }
-            },
             tos_acceptance={
                 "date": int(time.time()),
                 "ip": request.remote_addr,
@@ -368,30 +326,6 @@ def check_stripe_status(data):
             # Get detailed requirements
             requirements = account.requirements
             
-            # Check if verification.document.front is in the requirements
-            # If not, we'll force it to be required
-            document_required = 'verification.document.front' in requirements.currently_due
-            
-            # If document verification is not required but should be, force it
-            if not document_required and not account.charges_enabled:
-                try:
-                    # Try to force document verification requirement
-                    stripe.Account.modify(
-                        account_id,
-                        individual={
-                            "verification": {
-                                "document": {
-                                    "front": None  # This forces Stripe to require document verification
-                                }
-                            }
-                        }
-                    )
-                    # Retrieve the account again to get updated requirements
-                    account = stripe.Account.retrieve(account_id)
-                    requirements = account.requirements
-                except Exception as e:
-                    print(f"Warning: Could not force document verification: {e}")
-            
             status = {
                 "isVerified": account.charges_enabled and account.payouts_enabled,
                 "isRestricted": requirements.disabled_reason is not None,
@@ -400,19 +334,6 @@ def check_stripe_status(data):
                 "currentDeadline": requirements.current_deadline,
                 "capabilities": account.capabilities
             }
-            
-            # If the account is marked as verified but should require document verification,
-            # override the status
-            if status["isVerified"] and not document_required:
-                # Add verification.document.front to pendingRequirements
-                if 'verification.document.front' not in status["pendingRequirements"]:
-                    status["pendingRequirements"].append('verification.document.front')
-                
-                # Set requiresInfo to true
-                status["requiresInfo"] = True
-                
-                # Set isVerified to false until document verification is complete
-                status["isVerified"] = False
             
             return jsonify(status)
         except stripe.error.StripeError as e:
@@ -466,23 +387,6 @@ def upload_document():
             
             # Clean up temporary file
             os.remove(filepath)
-            
-            # Update the account to use the uploaded document
-            if purpose == 'identity_document':
-                try:
-                    # Update the account with the document
-                    stripe.Account.modify(
-                        account_id,
-                        individual={
-                            "verification": {
-                                "document": {
-                                    "front": file_upload.id
-                                }
-                            }
-                        }
-                    )
-                except Exception as e:
-                    print(f"Warning: Could not update account with document: {e}")
             
             return jsonify({"id": file_upload.id})
         except stripe.error.StripeError as e:
@@ -623,16 +527,6 @@ def create_appointment_checkout(data):
         amount = int(data['amount'])  # Amount in cents
         stripe_account_id = data['stripe_account_id']
         
-        # Optional fields for metadata
-        service_id = data.get('serviceId')
-        service_title = data.get('serviceTitle')
-        provider_id = data.get('providerId')
-        buyer_id = data.get('buyerId')
-        appointment_date = data.get('appointmentDate')
-        formatted_date = data.get('formattedDate')
-        deposit_amount = data.get('depositAmount')
-        total_price = data.get('totalPrice')
-        
         # Create a Stripe Checkout Session
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
@@ -641,8 +535,8 @@ def create_appointment_checkout(data):
                     "price_data": {
                         "currency": "eur",
                         "product_data": {
-                            "name": f"Acompte pour {service_title or 'rendez-vous'}",
-                            "description": f"Réservation de rendez-vous {formatted_date or ''} sur Shay Beauty",
+                            "name": "Acompte pour rendez-vous",
+                            "description": "Réservation de rendez-vous sur Shay Beauty",
                         },
                         "unit_amount": amount,
                     },
@@ -650,23 +544,14 @@ def create_appointment_checkout(data):
                 }
             ],
             mode="payment",
-            success_url=data.get('successUrl', f"{request.host_url}payment/success?session_id={{CHECKOUT_SESSION_ID}}&appointment=true&date={appointment_date}&time={appointment_date}&service_id={service_id}&provider_id={provider_id}"),
-            cancel_url=data.get('cancelUrl', f"{request.host_url}payment/cancel"),
+            success_url=f"{request.host_url}payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{request.host_url}payment/cancel",
             payment_intent_data={
                 "application_fee_amount": 0,  # No fee for deposits
                 "transfer_data": {
                     "destination": stripe_account_id,
                 },
             },
-            metadata={
-                "type": "appointment_deposit",
-                "serviceId": service_id,
-                "providerId": provider_id,
-                "buyerId": buyer_id,
-                "appointmentDate": appointment_date,
-                "depositAmount": deposit_amount,
-                "totalPrice": total_price
-            }
         )
         
         return jsonify({"id": session.id, "url": session.url})
@@ -678,7 +563,7 @@ def create_appointment_checkout(data):
 def create_boost_session(data):
     try:
         # Validate required fields
-        required_fields = ['productId', 'duration', 'priceId']
+        required_fields = ['productId', 'duration', 'priceId', 'buyerId']
         for field in required_fields:
             if field not in data:
                 return jsonify({"error": f"Missing required field: {field}"}), 400
@@ -687,7 +572,7 @@ def create_boost_session(data):
         product_id = data['productId']
         duration = data['duration']
         price_id = data['priceId']
-        buyer_id = data.get('buyerId')
+        buyer_id = data['buyerId']
         
         # Create a Stripe Checkout Session
         session = stripe.checkout.Session.create(
@@ -760,36 +645,6 @@ def get_relay_points(data):
     
     except Exception as e:
         print(f"Error getting relay points: {e}")
-        return jsonify({"error": str(e)}), 500
-
-def create_shipping_label(data):
-    try:
-        # Validate required fields
-        required_fields = ['buyer', 'seller', 'relayPoint', 'productId']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({"error": f"Missing required field: {field}"}), 400
-        
-        # Extract data
-        buyer = data['buyer']
-        seller = data['seller']
-        relay_point = data['relayPoint']
-        product_id = data['productId']
-        order_id = data.get('orderId', str(uuid.uuid4()))
-        
-        # For this example, we'll return mock data
-        # In a real implementation, you would call the Mondial Relay API
-        mock_tracking_number = f"MR{int(time.time())}"
-        mock_pdf_url = "https://example.com/shipping-label.pdf"
-        
-        return jsonify({
-            "success": True,
-            "trackingNumber": mock_tracking_number,
-            "pdfUrl": mock_pdf_url
-        })
-    
-    except Exception as e:
-        print(f"Error creating shipping label: {e}")
         return jsonify({"error": str(e)}), 500
 
 def handle_cors():
