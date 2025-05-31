@@ -601,44 +601,74 @@ def get_relay_points(data):
     try:
         postal_code = data.get('postalCode')
         country = data.get('country', 'FR')
+        brand = os.getenv('MONDIAL_RELAY_BRAND_ID', 'CC22UCDZ')
+        private_key = os.getenv('MONDIAL_RELAY_API_KEY', 'niDRvHmZ')  # Remplace par ta vraie clé
+        url = "https://api.mondialrelay.com/WebService.asmx"
+        soap_action = "http://www.mondialrelay.fr/webservice/WSI2_PointRelais_Recherche"
 
-        # Appel réel à l’API Mondial Relay
-        response = requests.post(
-            'https://connect-api.mondialrelay.com/api/parcelshop/search',
-            headers={"Content-Type": "application/json"},
-            json={
-                "BrandId": MONDIAL_RELAY_BRAND_ID,
-                "Country": country,
-                "PostCode": postal_code
-            },
-            auth=(MONDIAL_RELAY_API_LOGIN, MONDIAL_RELAY_API_PASSWORD)
-        )
+        if not postal_code:
+            return jsonify({"error": "Missing postalCode parameter"}), 400
+
+        # ⚙️ Générer la signature MD5 exigée par Mondial Relay
+        security_string = f"{brand}{country}{postal_code}1{private_key}"
+        md5_signature = hashlib.md5(security_string.encode('utf-8')).hexdigest().upper()
+
+        # 📦 Construire le corps SOAP XML
+        xml_body = f"""<?xml version="1.0" encoding="utf-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:mon="http://www.mondialrelay.fr/webservice/">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <mon:WSI2_PointRelais_Recherche>
+         <mon:Enseigne>{brand}</mon:Enseigne>
+         <mon:Pays>{country}</mon:Pays>
+         <mon:CP>{postal_code}</mon:CP>
+         <mon:Ville></mon:Ville>
+         <mon:Latitude></mon:Latitude>
+         <mon:Longitude></mon:Longitude>
+         <mon:NombreResultats>5</mon:NombreResultats>
+         <mon:RayonRecherche>10</mon:RayonRecherche>
+         <mon:TypeActivite>1</mon:TypeActivite>
+         <mon:Security>{md5_signature}</mon:Security>
+      </mon:WSI2_PointRelais_Recherche>
+   </soapenv:Body>
+</soapenv:Envelope>"""
+
+        headers = {
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": soap_action
+        }
+
+        response = requests.post(url, data=xml_body.encode('utf-8'), headers=headers)
 
         if response.status_code != 200:
-            print(f"Error from Mondial Relay: {response.text}")
+            print("❌ Mondial Relay SOAP error:", response.text)
             return jsonify({"error": "Mondial Relay API failed"}), 500
 
-        relay_points = response.json().get("ParcelShopList", [])
-        
-        # Normalisation si besoin
-        formatted_points = [
-            {
-                "id": point["ParcelShopId"],
-                "name": point["Name"],
-                "address": point["Address1"],
-                "postalCode": point["Postcode"],
-                "city": point["City"],
-                "distance": point.get("Distance", 0),
-                "openingHours": point.get("OpeningHours", ""),
-                "photoUrl": point.get("PictureUrl", None)
-            }
-            for point in relay_points
-        ]
+        # ✅ Parse XML response
+        root = ET.fromstring(response.content)
+        ns = {'soap': 'http://schemas.xmlsoap.org/soap/envelope/'}
+        body = root.find('soap:Body', ns)
+        result = body.find('.//{http://www.mondialrelay.fr/webservice/}WSI2_PointRelais_RechercheResult')
+        parcel_list = result.find('ListePointRelais')
 
-        return jsonify({"relay_points": formatted_points})
-    
+        relay_points = []
+        if parcel_list is not None:
+            for point in parcel_list.findall('PointRelais_Details'):
+                relay_points.append({
+                    "id": point.findtext('Num'),
+                    "name": point.findtext('LgAdr1'),
+                    "address": point.findtext('LgAdr2'),
+                    "postalCode": point.findtext('CP'),
+                    "city": point.findtext('Ville'),
+                    "distance": float(point.findtext('Distance') or 0),
+                    "openingHours": point.findtext('Horaires_Lundi')  # Simplifié
+                })
+
+        return jsonify({"relay_points": relay_points})
+
     except Exception as e:
-        print(f"Error getting relay points: {e}")
+        print("Erreur Mondial Relay:", e)
         return jsonify({"error": str(e)}), 500
         
 def handle_cors():
