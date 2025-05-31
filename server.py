@@ -597,54 +597,39 @@ def create_boost_session(data):
         print(f"Error creating boost session: {e}")
         return jsonify({"error": str(e)}), 500
 
-def get_relay_points(data):
+@app.route('/api/relay-points', methods=['POST'])
+def get_relay_points():
     try:
-        postal_code = data.get('postalCode')
-        country = data.get('country', 'FR')
-        brand = os.getenv('MONDIAL_RELAY_BRAND_ID', 'CC22UCDZ')
-        private_key = os.getenv('MONDIAL_RELAY_API_KEY', 'niDRvHmZ')  # Remplace par ta vraie clé
-        url = "https://api.mondialrelay.com/WebService.asmx"
-        soap_action = "http://www.mondialrelay.fr/webservice/WSI2_PointRelais_Recherche"
+        postal_code = request.json.get('postalCode')
+        security_code = hashlib.md5(
+            f"{os.getenv('MONDIALRELAY_BRAND_ID')}{postal_code}{os.getenv('MONDIALRELAY_SECURITY_KEY')}".encode()
+        ).hexdigest().upper()
 
-        if not postal_code:
-            return jsonify({"error": "Missing postalCode parameter"}), 400
+        soap_request = f"""<?xml version="1.0" encoding="utf-8"?>
+        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+            <soap:Body>
+                <WSI4_PointRelais_Recherche xmlns="http://www.mondialrelay.fr/webservice/">
+                    <Enseigne>{os.getenv('MONDIALRELAY_BRAND_ID')}</Enseigne>
+                    <Pays>FR</Pays>
+                    <CP>{postal_code}</CP>
+                    <NombreResultats>20</NombreResultats>
+                    <Security>{security_code}</Security>
+                </WSI4_PointRelais_Recherche>
+            </soap:Body>
+        </soap:Envelope>"""
 
-        # ⚙️ Générer la signature MD5 exigée par Mondial Relay
-        security_string = f"{brand}{country}{postal_code}1{private_key}"
-        md5_signature = hashlib.md5(security_string.encode('utf-8')).hexdigest().upper()
-
-        # 📦 Construire le corps SOAP XML
-        xml_body = f"""<?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-                  xmlns:mon="http://www.mondialrelay.fr/webservice/">
-   <soapenv:Header/>
-   <soapenv:Body>
-      <mon:WSI2_PointRelais_Recherche>
-         <mon:Enseigne>{brand}</mon:Enseigne>
-         <mon:Pays>{country}</mon:Pays>
-         <mon:CP>{postal_code}</mon:CP>
-         <mon:Ville></mon:Ville>
-         <mon:Latitude></mon:Latitude>
-         <mon:Longitude></mon:Longitude>
-         <mon:NombreResultats>5</mon:NombreResultats>
-         <mon:RayonRecherche>10</mon:RayonRecherche>
-         <mon:TypeActivite>1</mon:TypeActivite>
-         <mon:Security>{md5_signature}</mon:Security>
-      </mon:WSI2_PointRelais_Recherche>
-   </soapenv:Body>
-</soapenv:Envelope>"""
-
-        headers = {
-            "Content-Type": "text/xml; charset=utf-8",
-            "SOAPAction": soap_action
-        }
-
-        response = requests.post(url, data=xml_body.encode('utf-8'), headers=headers)
-
-        if response.status_code != 200:
-            print("❌ Mondial Relay SOAP error:", response.text)
-            return jsonify({"error": "Mondial Relay API failed"}), 500
-
+        response = requests.post(
+            "https://api.mondialrelay.com/Web_Services.asmx",
+            data=soap_request,
+            headers={'Content-Type': 'text/xml; charset=utf-8'}
+        )
+        
+        # Traitement de la réponse XML...
+        return jsonify({"points": processed_points})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+        
         # ✅ Parse XML response
         root = ET.fromstring(response.content)
         ns = {'soap': 'http://schemas.xmlsoap.org/soap/envelope/'}
