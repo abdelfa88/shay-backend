@@ -599,50 +599,48 @@ def create_boost_session(data):
 
 def get_relay_points(data):
     try:
-        # Validate required fields
-        if 'postalCode' not in data:
-            return jsonify({"error": "Missing postalCode parameter"}), 400
-        
-        postal_code = data['postalCode']
-        
-        # For this example, we'll return mock data
-        # In a real implementation, you would call the Mondial Relay API
-        mock_relay_points = [
-            {
-                "id": "12345",
-                "name": "Tabac Presse du Centre",
-                "address": "15 Rue du Commerce",
-                "postalCode": postal_code,
-                "city": "Paris",
-                "distance": 0.5,
-                "openingHours": "Lun-Sam: 9h-19h, Dim: Fermé"
+        postal_code = data.get('postalCode')
+        country = data.get('country', 'FR')
+
+        # Appel réel à l’API Mondial Relay
+        response = requests.post(
+            'https://connect-api.mondialrelay.com/api/parcelshop/search',
+            headers={"Content-Type": "application/json"},
+            json={
+                "BrandId": MONDIAL_RELAY_BRAND_ID,
+                "Country": country,
+                "PostCode": postal_code
             },
+            auth=(MONDIAL_RELAY_API_LOGIN, MONDIAL_RELAY_API_PASSWORD)
+        )
+
+        if response.status_code != 200:
+            print(f"Error from Mondial Relay: {response.text}")
+            return jsonify({"error": "Mondial Relay API failed"}), 500
+
+        relay_points = response.json().get("ParcelShopList", [])
+        
+        # Normalisation si besoin
+        formatted_points = [
             {
-                "id": "67890",
-                "name": "Supermarché Express",
-                "address": "42 Avenue de la République",
-                "postalCode": postal_code,
-                "city": "Paris",
-                "distance": 1.2,
-                "openingHours": "Lun-Dim: 8h-22h"
-            },
-            {
-                "id": "24680",
-                "name": "Librairie Moderne",
-                "address": "8 Boulevard Saint-Michel",
-                "postalCode": postal_code,
-                "city": "Paris",
-                "distance": 1.8,
-                "openingHours": "Lun-Sam: 10h-20h, Dim: Fermé"
+                "id": point["ParcelShopId"],
+                "name": point["Name"],
+                "address": point["Address1"],
+                "postalCode": point["Postcode"],
+                "city": point["City"],
+                "distance": point.get("Distance", 0),
+                "openingHours": point.get("OpeningHours", ""),
+                "photoUrl": point.get("PictureUrl", None)
             }
+            for point in relay_points
         ]
-        
-        return jsonify({"relay_points": mock_relay_points})
+
+        return jsonify({"relay_points": formatted_points})
     
     except Exception as e:
         print(f"Error getting relay points: {e}")
         return jsonify({"error": str(e)}), 500
-
+        
 def handle_cors():
     response = jsonify({"message": "CORS preflight request"})
     response.headers.add('Access-Control-Allow-Origin', '*')
