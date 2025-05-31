@@ -597,38 +597,65 @@ def create_boost_session(data):
         print(f"Error creating boost session: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/relay-points', methods=['POST'])
 def get_relay_points():
     try:
         postal_code = request.json.get('postalCode')
-        security_code = hashlib.md5(
-            f"{os.getenv('MONDIALRELAY_BRAND_ID')}{postal_code}{os.getenv('MONDIALRELAY_SECURITY_KEY')}".encode()
-        ).hexdigest().upper()
-
+        
+        # Configuration Mondial Relay
+        soap_url = "https://api.mondialrelay.com/Web_Services.asmx"
+        headers = {'Content-Type': 'text/xml; charset=utf-8'}
         soap_request = f"""<?xml version="1.0" encoding="utf-8"?>
         <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
             <soap:Body>
                 <WSI4_PointRelais_Recherche xmlns="http://www.mondialrelay.fr/webservice/">
-                    <Enseigne>{os.getenv('MONDIALRELAY_BRAND_ID')}</Enseigne>
+                    <Enseigne>{os.getenv("MONDIALRELAY_BRAND_ID")}</Enseigne>
                     <Pays>FR</Pays>
                     <CP>{postal_code}</CP>
                     <NombreResultats>20</NombreResultats>
-                    <Security>{security_code}</Security>
-                </WSI4_PointRelais_Recherche>
+                    <Security>VOTRE_CLE_SECURITE</Security>
+                    </WSI4_PointRelais_Recherche>
             </soap:Body>
         </soap:Envelope>"""
-
-        response = requests.post(
-            "https://api.mondialrelay.com/Web_Services.asmx",
-            data=soap_request,
-            headers={'Content-Type': 'text/xml; charset=utf-8'}
-        )
         
-        # Traitement de la réponse XML...
-        return jsonify({"points": processed_points})
+        # Envoi de la requête SOAP
+        response = requests.post(soap_url, data=soap_request, headers=headers)
+        root = ET.fromstring(response.content)
+        
+        # Gestion des namespaces
+        namespaces = {
+            'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+            'mr': 'http://www.mondialrelay.fr/webservice/'
+        }
+        
+        # Extraction sécurisée avec valeurs par défaut
+        relay_points = []
+        for point in root.findall(".//mr:PointRelais_Details", namespaces):
+            # Récupération avec fallback pour chaque champ
+            base_text = lambda path: point.findtext(f'mr:{path}', namespaces=namespaces) or ''
+            
+            relay_point = {
+                'id': point.findtext('mr:Num', namespaces=namespaces) or f'unknown-{uuid4()}',
+                'name': base_text('LgAdr1'),
+                'address': f"{base_text('LgAdr3')} {base_text('LgAdr4')}".strip(),
+                'postalCode': base_text('CP'),
+                'city': base_text('Ville'),
+                'distance': float(point.findtext('mr:Distance', namespaces=namespaces) or 0),
+                'openingHours': (
+                    point.findtext('mr:Horaires_Livraison/mr:string', namespaces=namespaces)
+                    or point.findtext('mr:Horaires_Retrait/mr:string', namespaces=namespaces)
+                    or 'Non communiqué'
+                ),
+                'photoUrl': ''  # Champ obligatoire vide par défaut
+            }
+            
+            # Validation finale pour éviter null/undefined
+            relay_point = {k: v if v is not None else '' for k, v in relay_point.items()}
+            relay_points.append(relay_point)
+            
+        return jsonify({'relay_points': relay_points})
         
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({'error': str(e)}), 500
         
         # ✅ Parse XML response
         root = ET.fromstring(response.content)
