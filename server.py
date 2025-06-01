@@ -608,12 +608,12 @@ def get_relay_points():
         <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
             <soap:Body>
                 <WSI4_PointRelais_Recherche xmlns="http://www.mondialrelay.fr/webservice/">
-                    <Enseigne>{os.getenv("MONDIALRELAY_BRAND_ID")}</Enseigne>
+                    <Enseigne>VOTRE_ENSEIGNE</Enseigne>
                     <Pays>FR</Pays>
                     <CP>{postal_code}</CP>
                     <NombreResultats>20</NombreResultats>
                     <Security>VOTRE_CLE_SECURITE</Security>
-                    </WSI4_PointRelais_Recherche>
+                </WSI4_PointRelais_Recherche>
             </soap:Body>
         </soap:Envelope>"""
         
