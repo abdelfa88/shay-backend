@@ -599,9 +599,9 @@ def create_boost_session(data):
         print(f"Error creating boost session: {e}")
         return jsonify({"error": str(e)}), 500
 
-def get_relay_points():
+def get_relay_points(data):
     try:
-        postal_code = request.json.get('postalCode')
+        postal_code = data.get('postalCode')
 
         # Configuration Mondial Relay
         soap_url = "https://api.mondialrelay.com/WebService.asmx"
