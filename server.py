@@ -597,20 +597,23 @@ def create_boost_session(data):
         print(f"Error creating boost session: {e}")
         return jsonify({"error": str(e)}), 500
 
+import hashlib
+import xml.etree.ElementTree as ET
+
 def get_relay_points():
     try:
         postal_code = request.json.get('postalCode')
-        
+
         # Configuration Mondial Relay
         soap_url = "https://api.mondialrelay.com/WebService.asmx"
         headers = {'Content-Type': 'text/xml; charset=utf-8'}
         brand_id = os.getenv("MONDIALRELAY_BRAND_ID")
         private_key = os.getenv("MONDIALRELAY_SECURITY_KEY")
 
-        # 🔐 Calculer la signature de sécurité (obligatoire)
+        # 🔐 Calcul signature
         security_code = hashlib.md5(f"{brand_id}FR{postal_code}1{private_key}".encode()).hexdigest().upper()
 
-        # 📨 Corps de la requête SOAP avec les vraies données
+        # SOAP Request
         soap_request = f"""<?xml version="1.0" encoding="utf-8"?>
         <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
             <soap:Body>
@@ -625,13 +628,13 @@ def get_relay_points():
             </soap:Body>
         </soap:Envelope>"""
 
-        # Envoi de la requête
+        # Envoi
         response = requests.post(soap_url, data=soap_request.encode('utf-8'), headers=headers)
         if response.status_code != 200:
             print("Mondial Relay response error:", response.text)
             return jsonify({'error': 'Mondial Relay API failed'}), 500
 
-        # 📦 Parser XML
+        # Parser XML
         root = ET.fromstring(response.content)
         ns = {
             'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
