@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import requests
 from werkzeug.utils import secure_filename
 import tempfile
+import hashlib
+import xml.etree.ElementTree as ET
 
 # Load environment variables
 load_dotenv()
@@ -597,9 +599,6 @@ def create_boost_session(data):
         print(f"Error creating boost session: {e}")
         return jsonify({"error": str(e)}), 500
 
-import hashlib
-import xml.etree.ElementTree as ET
-
 def get_relay_points():
     try:
         postal_code = request.json.get('postalCode')
@@ -659,32 +658,6 @@ def get_relay_points():
     except Exception as e:
         print("Erreur Mondial Relay:", e)
         return jsonify({'error': str(e)}), 500
-        
-        # ✅ Parse XML response
-        root = ET.fromstring(response.content)
-        ns = {'soap': 'http://schemas.xmlsoap.org/soap/envelope/'}
-        body = root.find('soap:Body', ns)
-        result = body.find('.//{http://www.mondialrelay.fr/webservice/}WSI2_PointRelais_RechercheResult')
-        parcel_list = result.find('ListePointRelais')
-
-        relay_points = []
-        if parcel_list is not None:
-            for point in parcel_list.findall('PointRelais_Details'):
-                relay_points.append({
-                    "id": point.findtext('Num'),
-                    "name": point.findtext('LgAdr1'),
-                    "address": point.findtext('LgAdr2'),
-                    "postalCode": point.findtext('CP'),
-                    "city": point.findtext('Ville'),
-                    "distance": float(point.findtext('Distance') or 0),
-                    "openingHours": point.findtext('Horaires_Lundi')  # Simplifié
-                })
-
-        return jsonify({"relay_points": relay_points})
-
-    except Exception as e:
-        print("Erreur Mondial Relay:", e)
-        return jsonify({"error": str(e)}), 500
         
 def handle_cors():
     response = jsonify({"message": "CORS preflight request"})
