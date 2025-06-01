@@ -145,10 +145,8 @@ def create_boost_session_route():
 def get_relay_points_route():
     if request.method == 'OPTIONS':
         return handle_cors()
-    
     try:
-        data = request.json
-        return get_relay_points(data)
+        return get_relay_points()  # Appel sans argument
     except Exception as e:
         print(f"Error getting relay points: {e}")
         return jsonify({"error": str(e)}), 500
@@ -601,63 +599,92 @@ def create_boost_session(data):
 
 def get_relay_points():
     try:
-        postal_code = request.json.get('postalCode')
+        data = request.json
+        postal_code = data.get('postalCode')
         
-        # Configuration Mondial Relay
-        soap_url = "https://api.mondialrelay.com/Web_Services.asmx"
-        headers = {'Content-Type': 'text/xml; charset=utf-8'}
+        if not postal_code:
+            return jsonify({"error": "Missing postalCode"}), 400
+        
+        # Récupération des credentials depuis .env
+        brand_id = os.getenv('MONDIALRELAY_BRAND_ID', 'CC22UCDZ')
+        api_password = os.getenv('MONDIALRELAY_API_PASSWORD', '@YeVkNvuZ*py]nSB7:Dq')
+        
+        # Construction du payload XML avec namespaces corrects
         soap_request = f"""<?xml version="1.0" encoding="utf-8"?>
-        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" 
+                       xmlns:mr="http://www.mondialrelay.fr/webservice/">
             <soap:Body>
-                <WSI4_PointRelais_Recherche xmlns="http://www.mondialrelay.fr/webservice/">
-                    <Enseigne>{os.getenv("MONDIALRELAY_BRAND_ID")}</Enseigne>
-                    <Pays>FR</Pays>
-                    <CP>{postal_code}</CP>
-                    <NombreResultats>20</NombreResultats>
-                    <Security>VOTRE_CLE_SECURITE</Security>
-                    </WSI4_PointRelais_Recherche>
+                <mr:WSI4_PointRelais_Recherche>
+                    <mr:Enseigne>{brand_id}</mr:Enseigne>
+                    <mr:Pays>FR</mr:Pays>
+                    <mr:CP>{postal_code}</mr:CP>
+                    <mr:NombreResultats>20</mr:NombreResultats>
+                    <mr:Security>{api_password}</mr:Security>
+                </mr:WSI4_PointRelais_Recherche>
             </soap:Body>
         </soap:Envelope>"""
         
-        # Envoi de la requête SOAP
-        response = requests.post(soap_url, data=soap_request, headers=headers)
-        root = ET.fromstring(response.content)
+        # Envoi de la requête
+        response = requests.post(
+            "https://api.mondialrelay.com/Web_Services.asmx",
+            data=soap_request,
+            headers={'Content-Type': 'text/xml; charset=utf-8'}
+        )
         
-        # Gestion des namespaces
+        # Vérification de la réponse
+        if response.status_code != 200:
+            return jsonify({
+                "error": f"Mondial Relay API error: {response.status_code}",
+                "details": response.text[:200]
+            }), 500
+        
+        # Parsing avec gestion des namespaces
+        root = ET.fromstring(response.content)
         namespaces = {
             'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
             'mr': 'http://www.mondialrelay.fr/webservice/'
         }
         
-        # Extraction sécurisée avec valeurs par défaut
+        # Extraction sécurisée des points relais
         relay_points = []
         for point in root.findall(".//mr:PointRelais_Details", namespaces):
-            # Récupération avec fallback pour chaque champ
-            base_text = lambda path: point.findtext(f'mr:{path}', namespaces=namespaces) or ''
+            # Fonction helper pour les champs texte
+            get_text = lambda el: point.findtext(f'mr:{el}', namespaces=namespaces) or ''
             
+            # Gestion des horaires
+            livraison = point.findtext('mr:Horaires_Livraison/mr:string', namespaces=namespaces) or ''
+            retrait = point.findtext('mr:Horaires_Retrait/mr:string', namespaces=namespaces) or ''
+            opening_hours = livraison if livraison else retrait
+            
+            # Construction de l'objet avec valeurs par défaut
             relay_point = {
-                'id': point.findtext('mr:Num', namespaces=namespaces) or f'unknown-{uuid4()}',
-                'name': base_text('LgAdr1'),
-                'address': f"{base_text('LgAdr3')} {base_text('LgAdr4')}".strip(),
-                'postalCode': base_text('CP'),
-                'city': base_text('Ville'),
-                'distance': float(point.findtext('mr:Distance', namespaces=namespaces) or 0),
-                'openingHours': (
-                    point.findtext('mr:Horaires_Livraison/mr:string', namespaces=namespaces)
-                    or point.findtext('mr:Horaires_Retrait/mr:string', namespaces=namespaces)
-                    or 'Non communiqué'
-                ),
-                'photoUrl': ''  # Champ obligatoire vide par défaut
+                'id': get_text('Num') or f'unknown-{uuid.uuid4().hex[:8]}',
+                'name': get_text('LgAdr1'),
+                'address': f"{get_text('LgAdr3')} {get_text('LgAdr4')}".strip(),
+                'postalCode': get_text('CP'),
+                'city': get_text('Ville'),
+                'distance': float(get_text('Distance') or 0),
+                'openingHours': opening_hours or 'Non communiqué',
+                'photoUrl': ''
             }
             
-            # Validation finale pour éviter null/undefined
+            # Nettoyage final des valeurs null
             relay_point = {k: v if v is not None else '' for k, v in relay_point.items()}
             relay_points.append(relay_point)
             
         return jsonify({'relay_points': relay_points})
         
+    except ET.ParseError as e:
+        return jsonify({
+            "error": "XML parsing error",
+            "details": str(e),
+            "response": response.text[:500] if 'response' in locals() else None
+        }), 500
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({
+            "error": str(e),
+            "stack": traceback.format_exc()
+        }), 500
         
 def handle_cors():
     response = jsonify({"message": "CORS preflight request"})
