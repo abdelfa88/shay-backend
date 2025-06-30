@@ -2,6 +2,8 @@ import os
 import json
 import time
 import uuid
+import hashlib
+import traceback
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import stripe
@@ -9,7 +11,6 @@ from dotenv import load_dotenv
 import requests
 from werkzeug.utils import secure_filename
 import tempfile
-import hashlib
 import xml.etree.ElementTree as ET
 
 # Load environment variables
@@ -31,9 +32,9 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 # Mondial Relay API credentials
 MONDIAL_RELAY_API_URL = 'https://connect-api.mondialrelay.com/api/Shipment'
-MONDIAL_RELAY_BRAND_ID = 'CC22UCDZ'
-MONDIAL_RELAY_API_LOGIN = 'CC22UCDZ@business-api.mondialrelay.com'
-MONDIAL_RELAY_API_PASSWORD = '@YeVkNvuZ*py]nSB7:Dq'
+MONDIAL_RELAY_BRAND_ID = os.getenv('MONDIALRELAY_BRAND_ID', 'CC22UCDZ')
+MONDIAL_RELAY_API_LOGIN = os.getenv('MONDIALRELAY_API_LOGIN', 'CC22UCDZ@business-api.mondialrelay.com')
+MONDIAL_RELAY_API_PASSWORD = os.getenv('MONDIALRELAY_API_PASSWORD', '@YeVkNvuZ*py]nSB7:Dq')
 
 # Temporary directory for file uploads
 UPLOAD_FOLDER = tempfile.gettempdir()
@@ -149,6 +150,19 @@ def get_relay_points_route():
         return get_relay_points()  # Appel sans argument
     except Exception as e:
         print(f"Error getting relay points: {e}")
+        return jsonify({"error": str(e)}), 500
+
+# Nouvelle route pour la création d'étiquette d'expédition
+@app.route('/api/create-shipping-label', methods=['POST', 'OPTIONS'])
+def create_shipping_label_route():
+    if request.method == 'OPTIONS':
+        return handle_cors()
+    
+    try:
+        data = request.json
+        return create_shipping_label(data)
+    except Exception as e:
+        print(f"Error creating shipping label: {e}")
         return jsonify({"error": str(e)}), 500
 
 # Function implementations
@@ -685,7 +699,109 @@ def get_relay_points():
             "error": str(e),
             "stack": traceback.format_exc()
         }), 500
-        
+
+# Fonction pour créer une étiquette d'expédition
+def create_shipping_label(data):
+    try:
+        # Valider les données requises
+        required_fields = ['buyer', 'seller', 'relayPoint', 'productId']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({"error": f"Missing required field: {field}"}), 400
+
+        buyer = data['buyer']
+        seller = data['seller']
+        relay_point = data['relayPoint']
+        product_id = data['productId']
+
+        # Construire le payload XML pour Mondial Relay
+        soap_request = f"""<?xml version="1.0" encoding="utf-8"?>
+        <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" 
+                       xmlns:mr="http://www.mondialrelay.fr/webservice/">
+            <soap:Body>
+                <mr:WSI2_CreationEtiquette>
+                    <mr:Enseigne>{MONDIAL_RELAY_BRAND_ID}</mr:Enseigne>
+                    <mr:ModeCol>CCC</mr:ModeCol>
+                    <mr:ModeLiv>24R</mr:ModeLiv>
+                    <mr:NDossier></mr:NDossier>
+                    <mr:NExpedition></mr:NExpedition>
+                    <mr:Expe_Langage>FR</mr:Expe_Langage>
+                    <mr:Expe_Ad1>{seller['fullName']}</mr:Expe_Ad1>
+                    <mr:Expe_Ad3>{seller['street']}</mr:Expe_Ad3>
+                    <mr:Expe_Ville>{seller['city']}</mr:Expe_Ville>
+                    <mr:Expe_CP>{seller['postalCode']}</mr:Expe_CP>
+                    <mr:Expe_Pays>FR</mr:Expe_Pays>
+                    <mr:Expe_Tel1>{seller['phone']}</mr:Expe_Tel1>
+                    <mr:Expe_Mail></mr:Expe_Mail>
+                    <mr:Dest_Langage>FR</mr:Dest_Langage>
+                    <mr:Dest_Ad1>{buyer['fullName']}</mr:Dest_Ad1>
+                    <mr:Dest_Ad3>{relay_point['address']}</mr:Dest_Ad3>
+                    <mr:Dest_Ville>{relay_point['city']}</mr:Dest_Ville>
+                    <mr:Dest_CP>{relay_point['postalCode']}</mr:Dest_CP>
+                    <mr:Dest_Pays>FR</mr:Dest_Pays>
+                    <mr:Dest_Tel1>{buyer['phone']}</mr:Dest_Tel1>
+                    <mr:Dest_Mail></mr:Dest_Mail>
+                    <mr:Poids>500</mr:Poids>
+                    <mr:Longueur>20</mr:Longueur>
+                    <mr:Taille>10</mr:Taille>
+                    <mr:NbColis>1</mr:NbColis>
+                    <mr:CRT_Valeur>0</mr:CRT_Valeur>
+                    <mr:CRT_Devise>EUR</mr:CRT_Devise>
+                    <mr:Exp_Valeur>0</mr:Exp_Valeur>
+                    <mr:Exp_Devise>EUR</mr:Exp_Devise>
+                    <mr:COL_Rel_Pays>FR</mr:COL_Rel_Pays>
+                    <mr:COL_Rel></mr:COL_Rel>
+                    <mr:LIV_Rel_Pays>FR</mr:LIV_Rel_Pays>
+                    <mr:LIV_Rel>{relay_point['id']}</mr:LIV_Rel>
+                    <mr:TAvisage>N</mr:TAvisage>
+                    <mr:TReprise>N</mr:TReprise>
+                    <mr:Montage>0</mr:Montage>
+                    <mr:TRDV>N</mr:TRDV>
+                    <mr:Assurance>0</mr:Assurance>
+                    <mr:Instructions></mr:Instructions>
+                    <mr:Security>{hashlib.md5(f"{MONDIAL_RELAY_BRAND_ID}{MONDIAL_RELAY_API_PASSWORD}".encode()).hexdigest().upper()}</mr:Security>
+                </mr:WSI2_CreationEtiquette>
+            </soap:Body>
+        </soap:Envelope>"""
+
+        # Envoyer la requête à l'API Mondial Relay
+        response = requests.post(
+            MONDIAL_RELAY_API_URL,
+            data=soap_request,
+            headers={'Content-Type': 'text/xml; charset=utf-8'}
+        )
+
+        # Vérifier la réponse
+        if response.status_code != 200:
+            return jsonify({
+                "error": f"Mondial Relay API error: {response.status_code}",
+                "details": response.text
+            }), 500
+
+        # Parser la réponse XML
+        root = ET.fromstring(response.content)
+        namespaces = {
+            'soap': 'http://schemas.xmlsoap.org/soap/envelope/',
+            'mr': 'http://www.mondialrelay.fr/webservice/'
+        }
+
+        # Vérifier si la création a réussi
+        stat = root.findtext('.//mr:Stat', namespaces=namespaces)
+        if stat != "0":
+            error_message = root.findtext('.//mr:Libelle', namespaces=namespaces) or "Unknown error"
+            return jsonify({"error": f"Mondial Relay error: {error_message}"}), 400
+
+        # Récupérer l'URL du PDF
+        pdf_url = root.findtext('.//mr:URL_PDF', namespaces=namespaces)
+        if not pdf_url:
+            return jsonify({"error": "No PDF URL in response"}), 500
+
+        return jsonify({"pdfUrl": pdf_url})
+
+    except Exception as e:
+        print(f"Error in create_shipping_label: {e}")
+        return jsonify({"error": str(e)}), 500
+
 def handle_cors():
     response = jsonify({"message": "CORS preflight request"})
     response.headers.add('Access-Control-Allow-Origin', '*')
