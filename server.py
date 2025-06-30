@@ -12,6 +12,7 @@ import requests
 from werkzeug.utils import secure_filename
 import tempfile
 import xml.etree.ElementTree as ET
+import supabase
 
 # Load environment variables
 load_dotenv()
@@ -26,6 +27,16 @@ if not stripe.api_key or not stripe.api_key.startswith('sk_'):
 else:
     print(f"✅ Stripe API key detected: {stripe.api_key[:4]}************")
 
+# Initialize Supabase
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY')
+if not SUPABASE_URL or not SUPABASE_KEY:
+    print("❌ Error: Missing Supabase environment variables.")
+    supabase_client = None
+else:
+    supabase_client = supabase.create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("✅ Supabase client initialized")
+
 # Initialize Flask app
 app = Flask(__name__, static_folder='dist', static_url_path='/')
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -35,6 +46,7 @@ MONDIAL_RELAY_API_URL = 'https://connect-api.mondialrelay.com/api/Shipment'
 MONDIAL_RELAY_BRAND_ID = os.getenv('MONDIALRELAY_BRAND_ID', 'CC22UCDZ')
 MONDIAL_RELAY_API_LOGIN = os.getenv('MONDIALRELAY_API_LOGIN', 'CC22UCDZ@business-api.mondialrelay.com')
 MONDIAL_RELAY_API_PASSWORD = os.getenv('MONDIALRELAY_API_PASSWORD', '@YeVkNvuZ*py]nSB7:Dq')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
 
 # Temporary directory for file uploads
 UPLOAD_FOLDER = tempfile.gettempdir()
@@ -164,6 +176,34 @@ def create_shipping_label_route():
     except Exception as e:
         print(f"Error creating shipping label: {e}")
         return jsonify({"error": str(e)}), 500
+
+# Webhook Stripe pour gérer les paiements réussis
+@app.route('/api/stripe-webhook', methods=['POST'])
+def stripe_webhook():
+    if not STRIPE_WEBHOOK_SECRET:
+        return jsonify({"error": "Webhook secret not configured"}), 500
+    
+    payload = request.data
+    sig_header = request.headers.get('Stripe-Signature')
+    event = None
+
+    try:
+        event = stripe.Webhook.construct_event(
+            payload, sig_header, STRIPE_WEBHOOK_SECRET
+        )
+    except ValueError as e:
+        # Invalid payload
+        return jsonify({"error": "Invalid payload"}), 400
+    except stripe.error.SignatureVerificationError as e:
+        # Invalid signature
+        return jsonify({"error": "Invalid signature"}), 400
+
+    # Handle the checkout.session.completed event
+    if event['type'] == 'checkout.session.completed':
+        session = event['data']['object']
+        return handle_successful_payment(session)
+
+    return jsonify({"status": "success"}), 200
 
 # Function implementations
 def create_stripe_account_with_token(data):
@@ -503,7 +543,8 @@ def create_checkout_session(data):
                 "usePlatformAccount": "true" if use_platform_account else "false",
                 "deliveryAddress": json.dumps(delivery_address),
                 "relayPoint": json.dumps(relay_point) if relay_point else None,
-                "shippingCost": shipping_cost
+                "shippingCost": shipping_cost,
+                "type": "product"
             }
         }
         
@@ -562,6 +603,9 @@ def create_appointment_checkout(data):
                     "destination": stripe_account_id,
                 },
             },
+            metadata={
+                "type": "appointment"
+            }
         )
         
         return jsonify({"id": session.id, "url": session.url})
@@ -801,6 +845,92 @@ def create_shipping_label(data):
     except Exception as e:
         print(f"Error in create_shipping_label: {e}")
         return jsonify({"error": str(e)}), 500
+
+def handle_successful_payment(session):
+    try:
+        metadata = session.get('metadata', {})
+        payment_type = metadata.get('type', '')
+        
+        # Only handle product purchases
+        if payment_type != 'product':
+            return jsonify({"status": "ignored"}), 200
+
+        # Extract necessary data from metadata
+        product_id = metadata.get('productId')
+        seller_id = metadata.get('sellerId')
+        buyer_id = metadata.get('buyerId')
+        shipping_cost = metadata.get('shippingCost')
+        delivery_address = json.loads(metadata.get('deliveryAddress'))
+        relay_point = json.loads(metadata.get('relayPoint')) if metadata.get('relayPoint') else None
+        
+        # Fetch seller's address from database
+        if not supabase_client:
+            raise Exception("Supabase client not initialized")
+
+        # Fetch seller's profile
+        response = supabase_client.from_('profiles').select('metadata').eq('id', seller_id).execute()
+        if response.error:
+            raise Exception(f"Error fetching seller profile: {response.error.message}")
+        
+        if not response.data or len(response.data) == 0:
+            raise Exception(f"No profile found for seller ID: {seller_id}")
+        
+        seller_metadata = response.data[0].get('metadata', {})
+        seller_address = seller_metadata.get('shippingAddress', {})
+        
+        # Create shipping label
+        label_data = {
+            'buyer': {
+                'fullName': delivery_address.get('fullName'),
+                'phone': delivery_address.get('phone'),
+                'street': delivery_address.get('street'),
+                'postalCode': delivery_address.get('postalCode'),
+                'city': delivery_address.get('city'),
+                'country': delivery_address.get('country', 'FR')
+            },
+            'seller': {
+                'fullName': seller_address.get('fullName', 'Vendeur Shay Beauty'),
+                'phone': seller_address.get('phone', ''),
+                'street': seller_address.get('street', ''),
+                'postalCode': seller_address.get('postalCode', ''),
+                'city': seller_address.get('city', ''),
+                'country': seller_address.get('country', 'FR')
+            },
+            'relayPoint': relay_point,
+            'productId': product_id
+        }
+
+        # Call create_shipping_label
+        label_response = create_shipping_label(label_data)
+        if isinstance(label_response, tuple):
+            # If it returns a tuple, it's a Flask response (error case)
+            label_data = label_response[0].json
+            if 'error' in label_data:
+                raise Exception(f"Failed to create shipping label: {label_data['error']}")
+        else:
+            # This should be a JSON response from the function
+            label_data = label_response.json
+
+        pdf_url = label_data.get('pdfUrl')
+        if not pdf_url:
+            raise Exception("No PDF URL in label response")
+
+        # Send message to seller
+        message_content = f"Voici votre étiquette Mondial Relay à imprimer pour expédier le colis: {pdf_url}"
+        message_data = {
+            "sender_id": buyer_id,
+            "receiver_id": seller_id,
+            "content": message_content
+        }
+        insert_response = supabase_client.from_('messages').insert([message_data]).execute()
+        if insert_response.error:
+            print(f"Error inserting message: {insert_response.error.message}")
+
+        return jsonify({'status': 'shipping label created'}), 200
+
+    except Exception as e:
+        print(f"Error handling successful payment: {e}")
+        return jsonify({'error': str(e)}), 500
 
 def handle_cors():
     response = jsonify({"message": "CORS preflight request"})
